@@ -31,12 +31,31 @@ var platform = {
 		 * @param Event event
 		 */
 		onMouseDown: function(event){
+			// We have entered the stage but aren't flagged as having the mouse down
+			// so do nothing
+			if (event.type === "mouseenter" && platform.mouseDown === false) {
+				return false;
+			}
+
+			// Flag the mouse as being within the platform
+			if (event.type === "mouseenter") {
+				platform.outOfBounds = false;
+			}
+
+			// Set the mouse position
+			var mousePosition = platform.stage.getPointerPosition();
+
+			// Mouseenter doesn't work with getPointerPosition so we have to work it out
+			if (mousePosition === undefined) {
+				mousePosition = platform.util.getPointerPosition(event);
+			}
+
 			// Flag the mouse as being down
 			platform.mouseDown = true;
 
 			// Reset the points array and add the start position
 			platform.drawLine.points = [];
-			platform.drawLine.points.push(platform.stage.getPointerPosition());
+			platform.drawLine.points.push(mousePosition);
 
 			// Initialise the new line
 			platform.drawLine.newLine = new Kinetic.Line({
@@ -56,7 +75,18 @@ var platform = {
 		 * @param Event event
 		 */
 		onMouseUp: function(event){
-			platform.mouseDown = false;
+			// If the mouse leaves the stage and isn't currently doing anything
+			// ignore it
+			if (event.type === "mouseleave" && platform.mouseDown === false){
+				return false;
+			}
+
+			// Flag the mouse button as unpressed if a mouseup event
+			if (event.type === "mouseup") {
+				platform.mouseDown = false;
+			} else {
+				platform.outOfBounds = true;
+			}
 
 			// If there is only one point the mouse did not move draw the correct shape 
 			// at the start position
@@ -96,6 +126,15 @@ var platform = {
 			}
 		}
 	},
+	util: {
+		getPointerPosition: function(event){
+			var position = {
+				x: event.pageX - $(platform.stage.getContent()).offset().left,
+				y: event.pageY - $(platform.stage.getContent()).offset().top
+			};
+			return position;
+		}
+	},
 	/**
 	 * Function to initialise the drawing platform
 	 */
@@ -116,10 +155,12 @@ var platform = {
 		// Set the active layer
 		platform.activeLayer = platform.layers.background;
 
+		var stageContent  = $(platform.stage.getContent());
+		
 		// Add event listeners
-		$(platform.stage.getContent()).on("mousedown", platform.drawLine.onMouseDown);
-		$(platform.stage.getContent()).on("mouseup", platform.drawLine.onMouseUp);
-		$(platform.stage.getContent()).on("mousemove", platform.drawLine.onMouseMove);
+		stageContent.on("mousedown mouseenter", platform.drawLine.onMouseDown);
+		stageContent.on("mouseup mouseleave", platform.drawLine.onMouseUp);
+		stageContent.on("mousemove", platform.drawLine.onMouseMove);
 	}
 };
 
