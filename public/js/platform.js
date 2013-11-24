@@ -142,8 +142,8 @@ var platform = {
 		// Create the stage
 		platform.stage = new Kinetic.Stage({
 			container: 'stage',
-			width: 720,
-			height: 405
+			width: 900,
+			height: 506
 		});
 
 		// Add the layers to the stage
@@ -156,7 +156,7 @@ var platform = {
 		platform.activeLayer = platform.layers.background;
 
 		var stageContent  = $(platform.stage.getContent());
-		
+
 		// Add event listeners
 		stageContent.on("mousedown mouseenter", platform.drawLine.onMouseDown);
 		stageContent.on("mouseup mouseleave", platform.drawLine.onMouseUp);
