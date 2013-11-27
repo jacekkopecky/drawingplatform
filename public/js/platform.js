@@ -38,39 +38,88 @@ var platform = {
 		 * @param bool global
 		 */
 		addLayer: function(layer, global, securityOverride){
-			if (!securityOverride && user.securityProfile > 2) {
-				alert('You must be a contributor or higher to add new layers');
-				return false;
+			try {
+				if (!securityOverride) {
+					platform.util.isContributor(user);
+				}
+
+				if (!layer){
+					layer = new Kinetic.Layer();
+					
+					var key;
+
+					if (global) {
+						if (!securityOverride) {
+							platform.util.isSessionOwner(user);
+						}
+						layer.setAttr('global', true);
+						key = Object.keys(this.globalLayers).length;
+						while (typeof this.globalLayers["globalLayer" + key] === "object"){
+							key++;
+						}
+						this.globalLayers["globalLayer" + key] = layer;
+					} else {
+						layer.setAttr('local', true);
+						layer.setAttr('owner', user.username);
+
+						key = Object.keys(this.localLayers).length;
+						while (typeof this.localLayers["localLayer" + key] === "object"){
+							key++;
+						}
+						this.localLayers["localLayer" + key] = layer;
+					}
+				}
+				platform.stage.add(layer);
+				layer.drawScene();
+				platform.activeLayer = layer;
+			} catch(error) {
+				alert(error.message);
 			}
+			
+		},
+		/**
+		 * Function to delete a given layer
+		 *
+		 * @param Kinetic.Layer layer
+		 * @return boolean
+		 */
+		deleteLayer: function(layer){
+			try{
+				if (layer.getAttr('global')) {
+					// Check user can delete global layers
+					platform.util.isSessionOwner(user);
 
-			if (!layer){
-				layer = new Kinetic.Layer();
-				
-				var key;
+					// Delete the layer from the global layers and the canvas
+					for (var g in this.globalLayers) {
+						if (this.globalLayers[g] === layer) {
+							delete this.globalLayers[g];
+							layer.destroy();
+							return true;
+						}
+					}
+				} else {
+					// Check the user is able to delete local layers
+					platform.util.isContributor(user);
 
-				if (global) {
-					if (!securityOverride && user.securityProfile > 1) {
-						alert('You must be a session owner to add a new global layer');
+					// Check that the user owns the layer they are trying to delete
+					if (layer.getAttr('owner') !== user.username) {
 						return false;
 					}
-					layer.setAttr('global', true);
-					key = Object.keys(this.globalLayers).length;
-					while (typeof this.globalLayers["globalLayer" + key] === "object"){
-						key++;
-					}
-					this.globalLayers["globalLayer" + key] = layer;
-				} else {
 
-					key = Object.keys(this.localLayers).length;
-					while (typeof this.localLayers["localLayer" + key] === "object"){
-						key++;
+					// Delete the layer from the local layers and the canvas
+					for (var i in this.localLayers) {
+						if (this.localLayers[i] === layer) {
+							delete this.localLayers[i];
+							layer.destroy();
+							return true;
+						}
 					}
-					this.localLayers["localLayer" + key] = layer;
 				}
+				
+			} catch(error){
+				alert(error.message);
+				return false;
 			}
-			platform.stage.add(layer);
-			layer.drawScene();
-			platform.activeLayer = layer;
 		},
 		globalLayers: {},
 		localLayers: {}
@@ -184,12 +233,46 @@ var platform = {
 		}
 	},
 	util: {
+		/**
+		 * Function to get the mouse position when entering the stage as KineticJS doesn't
+		 * detect the position onmouseenter
+		 *
+		 * @param jQueryEvent event
+		 * @return Object position
+		 */
 		getPointerPosition: function(event){
 			var position = {
 				x: event.pageX - $(platform.stage.getContent()).offset().left,
 				y: event.pageY - $(platform.stage.getContent()).offset().top
 			};
 			return position;
+		},
+		/**
+		 * Function to check that the current user is a session owner
+		 *
+		 * @param Object user
+		 * @param Object callback //optional callback function
+		 * @throws TypeError
+		 */
+		isSessionOwner: function(user, callback){
+			if (user.securityProfile > 1) {
+				throw new TypeError('Must be session owner');
+			}
+
+			if (callback) callback();
+		},
+		/**
+		 * Function to check that the current user is a contributor or higher
+		 *
+		 * @param Object user
+		 * @param Object callback //optional callback function
+		 * @throws TypeError
+		 */
+		isContributor: function(user, callback){
+			if (user.securityProfile > 2) {
+				throw new TypeError('Must be contributor or higher');
+			}
+			if (callback) callback();
 		}
 	},
 	/**
