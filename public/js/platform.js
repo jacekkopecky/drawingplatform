@@ -37,13 +37,22 @@ var platform = {
 		 * @param Kinetic.Layer layer (optional)
 		 * @param bool global
 		 */
-		addLayer: function(layer, global){
+		addLayer: function(layer, global, securityOverride){
+			if (!securityOverride && user.securityProfile > 2) {
+				alert('You must be a contributor or higher to add new layers');
+				return false;
+			}
+
 			if (!layer){
 				layer = new Kinetic.Layer();
 				
 				var key;
 
 				if (global) {
+					if (!securityOverride && user.securityProfile > 1) {
+						alert('You must be a session owner to add a new global layer');
+						return false;
+					}
 					layer.setAttr('global', true);
 					key = Object.keys(this.globalLayers).length;
 					while (typeof this.globalLayers["globalLayer" + key] === "object"){
@@ -51,6 +60,7 @@ var platform = {
 					}
 					this.globalLayers["globalLayer" + key] = layer;
 				} else {
+
 					key = Object.keys(this.localLayers).length;
 					while (typeof this.localLayers["localLayer" + key] === "object"){
 						key++;
@@ -198,7 +208,7 @@ var platform = {
 
 		// Add the layers to the stage
 		for (var i in platform.layers.globalLayers) {
-			platform.layers.addLayer(platform.layers.globalLayers[i], true);
+			platform.layers.addLayer(platform.layers.globalLayers[i], true, true);
 		}
 
 		// Set the active layer
@@ -211,6 +221,12 @@ var platform = {
 		stageContent.on("mouseup mouseleave", platform.drawLine.onMouseUp);
 		stageContent.on("mousemove", platform.drawLine.onMouseMove);
 	}
+};
+
+var user = {
+	username: "Will",
+	securityProfile: 1,
+	profileName: "sessionOwner"
 };
 
 $(document).ready(platform.init);
