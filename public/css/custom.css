@@ -15,7 +15,3 @@ html, body{
 #topNav{
 	height: 5%;
 }
-
-#stage canvas{
-	background: white !important;
-}

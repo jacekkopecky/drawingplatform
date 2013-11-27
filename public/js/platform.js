@@ -16,7 +16,54 @@ var platform = {
 
 	// Collection of layers
 	layers: {
-		background: new Kinetic.Layer(),
+		/**
+		 * Function to create a white background layer the size of the canvas
+		 */
+		createBackgroundLayer: function(){
+			var background = new Kinetic.Layer().setAttr('global', true);
+			var height = platform.stage.getHeight();
+			var width = platform.stage.getWidth();
+			var rectangle = new Kinetic.Rect({
+				height: height,
+				width: width,
+				fill: 'white',
+			});
+			background.add(rectangle);
+			this.globalLayers["background"] = background;
+		},
+		/**
+		 * Function to add a layer to the canvas
+		 *
+		 * @param Kinetic.Layer layer (optional)
+		 * @param bool global
+		 */
+		addLayer: function(layer, global){
+			if (!layer){
+				layer = new Kinetic.Layer();
+				
+				var key;
+
+				if (global) {
+					layer.setAttr('global', true);
+					key = Object.keys(this.globalLayers).length;
+					while (typeof this.globalLayers["globalLayer" + key] === "object"){
+						key++;
+					}
+					this.globalLayers["globalLayer" + key] = layer;
+				} else {
+					key = Object.keys(this.localLayers).length;
+					while (typeof this.localLayers["localLayer" + key] === "object"){
+						key++;
+					}
+					this.localLayers["localLayer" + key] = layer;
+				}
+			}
+			platform.stage.add(layer);
+			layer.drawScene();
+			platform.activeLayer = layer;
+		},
+		globalLayers: {},
+		localLayers: {}
 	},
 	activeLayer: {},
 	stage: {},
@@ -146,14 +193,16 @@ var platform = {
 			height: 506
 		});
 
+		// Create the background layer
+		platform.layers.createBackgroundLayer();
+
 		// Add the layers to the stage
-		for (var i in platform.layers) {
-			platform.stage.add(platform.layers[i]);
-			platform.layers[i].drawScene();
+		for (var i in platform.layers.globalLayers) {
+			platform.layers.addLayer(platform.layers.globalLayers[i], true);
 		}
 
 		// Set the active layer
-		platform.activeLayer = platform.layers.background;
+		platform.activeLayer = platform.layers.globalLayers.background;
 
 		var stageContent  = $(platform.stage.getContent());
 
