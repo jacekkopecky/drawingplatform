@@ -78,6 +78,37 @@ var platform = {
 			
 		},
 		/**
+		 * Function to lock or unlock a given layer
+		 *
+		 * @param Kinetic.Layer layer
+		 * @return boolean
+		 */
+		lockLayer: function(layer){
+			try{
+				if (layer.getAttr('global')) {
+					// Check user can lock global layers
+					platform.util.isSessionOwner(user);
+				} else {
+					// Check the user is able to lock local layers
+					platform.util.isContributor(user);
+
+					// Check that the user owns the layer they are trying to lock
+					platform.util.isLayerOwner(layer, user);
+				}
+
+				if (layer.getAttr('locked')) {
+					layer.setAttr('locked', false);
+				} else {
+					layer.setAttr('locked', true);
+				}
+				return true;
+				
+			} catch(error){
+				alert(error.message);
+				return false;
+			}
+		},
+		/**
 		 * Function to delete a given layer
 		 *
 		 * @param Kinetic.Layer layer
@@ -85,6 +116,8 @@ var platform = {
 		 */
 		deleteLayer: function(layer){
 			try{
+				platform.util.isLayerLocked(layer);
+
 				if (layer.getAttr('global')) {
 					// Check user can delete global layers
 					platform.util.isSessionOwner(user);
@@ -102,9 +135,7 @@ var platform = {
 					platform.util.isContributor(user);
 
 					// Check that the user owns the layer they are trying to delete
-					if (layer.getAttr('owner') !== user.username) {
-						return false;
-					}
+					platform.util.isLayerOwner(layer, user);
 
 					// Delete the layer from the local layers and the canvas
 					for (var i in this.localLayers) {
@@ -148,32 +179,47 @@ var platform = {
 				platform.outOfBounds = false;
 			}
 
-			// Set the mouse position
-			var mousePosition = platform.stage.getPointerPosition();
+			try{
+				//Check if the layer is locked
+				platform.util.isLayerLocked(platform.activeLayer);
 
-			// Mouseenter doesn't work with getPointerPosition so we have to work it out
-			if (mousePosition === undefined) {
-				mousePosition = platform.util.getPointerPosition(event);
+				// Check the user can make changes to the canvas
+				platform.util.isContributor(user);
+
+				// If the layer is local check the user owns it
+				if (platform.activeLayer.getAttr('local')) {
+					platform.util.isLayerOwner(platform.activeLayer, user);
+				}
+
+				// Set the mouse position
+				var mousePosition = platform.stage.getPointerPosition();
+
+				// Mouseenter doesn't work with getPointerPosition so we have to work it out
+				if (mousePosition === undefined) {
+					mousePosition = platform.util.getPointerPosition(event);
+				}
+
+				// Flag the mouse as being down
+				platform.mouseDown = true;
+
+				// Reset the points array and add the start position
+				platform.drawLine.points = [];
+				platform.drawLine.points.push(mousePosition);
+
+				// Initialise the new line
+				platform.drawLine.newLine = new Kinetic.Line({
+					points: platform.drawLine.points,
+					stroke: platform.brush.brushColor,
+					strokeWidth: platform.brush.brushSize,
+					lineCap: platform.brush.brushType,
+					lineJoin: platform.brush.brushType
+				});
+
+				// Add the new line to the active layer
+				platform.activeLayer.add(platform.drawLine.newLine);
+			} catch(error){
+				alert(error.message);
 			}
-
-			// Flag the mouse as being down
-			platform.mouseDown = true;
-
-			// Reset the points array and add the start position
-			platform.drawLine.points = [];
-			platform.drawLine.points.push(mousePosition);
-
-			// Initialise the new line
-			platform.drawLine.newLine = new Kinetic.Line({
-				points: platform.drawLine.points,
-				stroke: platform.brush.brushColor,
-				strokeWidth: platform.brush.brushSize,
-				lineCap: platform.brush.brushType,
-				lineJoin: platform.brush.brushType
-			});
-
-			// Add the new line to the active layer
-			platform.activeLayer.add(platform.drawLine.newLine);
 		},
 		/**
 		 * Mouse up event callback
@@ -252,11 +298,11 @@ var platform = {
 		 *
 		 * @param Object user
 		 * @param Object callback //optional callback function
-		 * @throws TypeError
+		 * @throws Error
 		 */
 		isSessionOwner: function(user, callback){
 			if (user.securityProfile > 1) {
-				throw new TypeError('Must be session owner');
+				throw new Error('Must be session owner');
 			}
 
 			if (callback) callback();
@@ -266,14 +312,39 @@ var platform = {
 		 *
 		 * @param Object user
 		 * @param Object callback //optional callback function
-		 * @throws TypeError
+		 * @throws Error
 		 */
 		isContributor: function(user, callback){
 			if (user.securityProfile > 2) {
-				throw new TypeError('Must be contributor or higher');
+				throw new Error('Must be contributor or higher');
 			}
 			if (callback) callback();
-		}
+		},
+		/**
+		 * Function to check that the layer is owned by the given user
+		 *
+		 * @param Kinetic.Layer layer
+		 * @param Object user
+		 * @param Object callback //optional callback function
+		 * @throws Error
+		 */
+		isLayerOwner: function(layer, user, callback){
+			if (layer.getAttr('owner') !== user.username) {
+				throw new Error('Must own layer to make changes');
+			}
+			if (callback) callback();
+		},
+		/**
+		 * Function to check if a layer is locked
+		 *
+		 * @param Kinetic.Layer layer
+		 * @throws Error
+		 */
+		isLayerLocked: function(layer){
+			if(layer.getAttr('locked')) {
+				throw new Error('Layer is locked');
+			}
+		},
 	},
 	/**
 	 * Function to initialise the drawing platform
