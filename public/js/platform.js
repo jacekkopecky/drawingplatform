@@ -390,6 +390,11 @@ var platform = {
 			stageContent.on("mousedown mouseenter", platform.drawLine.onMouseDown);
 			stageContent.on("mouseup mouseleave", platform.drawLine.onMouseUp);
 			stageContent.on("mousemove", platform.drawLine.onMouseMove);
+
+			$('#userUndoButton').on('click', platform.history.undoLastAction);
+			$('#userRedoButton').on('click', platform.history.redoLastAction);
+			$('#globalUndoButton').on('click', function(){platform.history.undoLastAction(true);});
+			$('#globalRedoButton').on('click', function(){platform.history.redoLastAction(true);});
 		}
 	},
 
@@ -595,6 +600,10 @@ var platform = {
 		platform.activeLayer = platform.layers.globalLayers['globalLayer0'];
 
 		platform.util.addEventListeners();
+		$('button').tooltip();
+		if (user.securityProfile > 1) {
+			$('.owner').prop('disabled', true);
+		}
 	}
 };
 
