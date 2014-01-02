@@ -29,7 +29,7 @@ var platform = {
 				fill: 'white',
 			});
 			background.add(rectangle);
-			this.globalLayers["background"] = background;
+			this.globalLayers['globalLayer0'] = background;
 		},
 		/**
 		 * Function to add a layer to the canvas
@@ -37,32 +37,32 @@ var platform = {
 		 * @param Kinetic.Layer layer (optional)
 		 * @param bool global
 		 */
-		addLayer: function(layer, global, securityOverride){
+		addLayer: function(layer, global, securityOverride, historyOverride){
 			try {
 				if (!securityOverride) {
 					platform.util.isContributor(user);
 				}
+				var key = Object.keys(this.globalLayers).length + Object.keys(this.localLayers).length;
 
 				if (!layer){
 					layer = new Kinetic.Layer();
 					
-					var key;
 
 					if (global) {
 						if (!securityOverride) {
 							platform.util.isSessionOwner(user);
 						}
 						layer.setAttr('global', true);
-						key = Object.keys(this.globalLayers).length;
+
 						while (typeof this.globalLayers["globalLayer" + key] === "object"){
 							key++;
 						}
+
 						this.globalLayers["globalLayer" + key] = layer;
 					} else {
 						layer.setAttr('local', true);
 						layer.setAttr('owner', user.username);
 
-						key = Object.keys(this.localLayers).length;
 						while (typeof this.localLayers["localLayer" + key] === "object"){
 							key++;
 						}
@@ -71,7 +71,10 @@ var platform = {
 				}
 				platform.stage.add(layer);
 				layer.drawScene();
+				layer.setAttr('zIndex', layer.getZIndex());
+				layer.setAttr('layerObjectKey', key);
 				platform.activeLayer = layer;
+				if (!historyOverride) platform.history.addToHistory();
 			} catch(error) {
 				alert(error.message);
 			}
@@ -101,6 +104,7 @@ var platform = {
 				} else {
 					layer.setAttr('locked', true);
 				}
+				platform.history.addToHistory();
 				return true;
 				
 			} catch(error){
@@ -127,6 +131,7 @@ var platform = {
 						if (this.globalLayers[g] === layer) {
 							delete this.globalLayers[g];
 							layer.destroy();
+							platform.history.addToHistory();
 							return true;
 						}
 					}
@@ -142,6 +147,7 @@ var platform = {
 						if (this.localLayers[i] === layer) {
 							delete this.localLayers[i];
 							layer.destroy();
+							platform.history.addToHistory();
 							return true;
 						}
 					}
@@ -150,6 +156,29 @@ var platform = {
 			} catch(error){
 				alert(error.message);
 				return false;
+			}
+		},
+		/**
+		 * Function to rebuild the layer model for referencing purposes after an undo or redo
+		 */
+		rebuildLayerModel: function(){
+			// Empty the layer model
+			this.globalLayers = {};
+			this.localLayers  = {};
+
+			// Get the current layers
+			var currentLayers = platform.stage.getChildren();
+			
+			// Restore the layers to their correct positions in the layer model
+			for (var i in currentLayers){
+				// Ignore anything that is not an object
+				if (typeof currentLayers[i] !== 'object') continue;
+
+				if (currentLayers[i].getAttr('global')) {
+					this.globalLayers['globalLayer' + currentLayers[i].getAttr('layerObjectKey')] = currentLayers[i];
+				} else {
+					this.localLayers['localLayer' + currentLayers[i].getAttr('layerObjectKey')] = currentLayers[i];
+				}
 			}
 		},
 		globalLayers: {},
@@ -233,9 +262,12 @@ var platform = {
 				return false;
 			}
 
+			var addToHistory = false;
+
 			// Flag the mouse button as unpressed if a mouseup event
 			if (event.type === "mouseup") {
 				platform.mouseDown = false;
+				addToHistory = true;
 			} else {
 				platform.outOfBounds = true;
 			}
@@ -263,6 +295,11 @@ var platform = {
 
 			// Redraw the active layer
 			platform.activeLayer.drawScene();
+
+			// add updated layer to history
+			if (addToHistory) {
+				platform.history.addToHistory(platform.activeLayer);
+			}
 		},
 		/**
 		 * Mouse move event callback
@@ -345,7 +382,194 @@ var platform = {
 				throw new Error('Layer is locked');
 			}
 		},
+		addEventListeners: function(){
+			
+			var stageContent  = $(platform.stage.getContent());
+
+			// Add event listeners
+			stageContent.on("mousedown mouseenter", platform.drawLine.onMouseDown);
+			stageContent.on("mouseup mouseleave", platform.drawLine.onMouseUp);
+			stageContent.on("mousemove", platform.drawLine.onMouseMove);
+		}
 	},
+
+	// Undo / redo functionality for user actions and all actions on session
+	history: {
+		userHistory: [],
+		globalHistory: [],
+		userRedo: [],
+		globalRedo: [],
+		/**
+		 * Function to add an action to the histories.
+		 * Should be called whenever the canvas is modified
+		 */
+		addToHistory: function(){
+			var localLayers   = {},
+				globalLayers  = {},
+				userHistory   = platform.history.userHistory,
+				userRedo      = platform.history.userRedo,
+				globalHistory = platform.history.globalHistory,
+				globalRedo    = platform.history.globalRedo;
+
+			// JSONify the local layers
+			for (var i in platform.layers.localLayers){
+				if (typeof platform.layers.localLayers[i] === 'object') {
+					localLayers[i] = platform.layers.localLayers[i].toJSON();
+				}
+			}
+
+			// JSONify the global layers
+			for (var j in platform.layers.globalLayers){
+				if (typeof platform.layers.globalLayers[j] === 'object') {
+					globalLayers[j] = platform.layers.globalLayers[j].toJSON();
+				}
+			}
+
+			// Create an action object consisting of the current instances of local
+			// and global layers
+			var action = {
+				localLayers: localLayers,
+				globalLayers: globalLayers
+			};
+
+			// If more than 20 actions are already stored, remove the oldest
+			if (userHistory.length > 20) userHistory.shift();
+			if (globalHistory.length > 20) globalHistory.shift();
+
+			// Add the action to the histories
+			userHistory.push(action);
+			globalHistory.push(action);
+
+			// Empty the redo arrays as they have become obsolete
+			userRedo.splice(0);
+			globalRedo.splice(0);
+		},
+		/**
+		 * Function to undo the last action. By default undoes the user's last
+		 * action. If undoing a global action, the last change made to the canvas
+		 * will be undone.
+		 *
+		 * @param boolean global -- Global undo?
+		 * @return boolean
+		 * @TODO - add support for global undo
+		 */
+		undoLastAction: function(global){
+			var history = platform.history.userHistory,
+				redo    = platform.history.userRedo,
+				stage   = platform.stage;
+
+			// if (global) {
+			// 	history = platform.history.globalHistory;
+			// 	redo = platform.history.globalRedo;
+			// }
+
+			// If we are at the beginning of the history we can't undo so show an alert
+			if (history.length === 1) {
+				alert('Nothing to undo!');
+				return false;
+			}
+
+			// Get the last action and move it to the redo array
+			var action = history.pop();
+			redo.push(action);
+
+			// Update the action to reference the previous canvas state
+			action = history[history.length-1];
+
+			// Remove the existing layers from the canvas
+			stage.destroyChildren();
+
+			// Restore the local layers from the JSON
+			for (var i in action.localLayers){
+				stage.add(Kinetic.Node.create(action.localLayers[i]));
+				stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('zIndex'));
+			}
+
+			// Restore the global layers from the JSON
+			for (var j in action.globalLayers){
+				stage.add(Kinetic.Node.create(action.globalLayers[j]));
+				stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('zIndex'));
+			}
+
+			// Restore the active layer
+			for (var k in stage.children){
+				if (typeof stage.children[k] === 'object' &&
+					stage.children[k].getAttr('zIndex') === platform.activeLayer.getAttr('zIndex')){
+					platform.activeLayer = stage.children[k];
+				}
+			}
+
+			// Rebuild the layer model used by the platform
+			platform.layers.rebuildLayerModel();
+
+			// Redraw the canvas
+			stage.drawScene();
+		},
+		/**
+		 * Function to redo the last action. By default redoes the user's last
+		 * action. If redoing a global action, the last change made to the canvas
+		 * will be redone.
+		 *
+		 * @param boolean global -- Global redo?
+		 * @return boolean
+		 * @TODO - add support for global redo
+		 */
+		redoLastAction: function(global){
+			var history = platform.history.userHistory,
+				redo    = platform.history.userRedo,
+				stage   = platform.stage;
+
+			// if (global) {
+			// 	history = platform.history.globalHistory;
+			// 	redo = platform.history.globalRedo;
+			// }
+
+			// If no redo array then there is nothing to redo!
+			if (!redo.length) {
+				alert('Nothing to redo!');
+				return false;
+			}
+
+			// Get the action that is being restored and add it to the history
+			var action = redo.pop();
+			history.push(action);
+
+			if (history.length === 1) {
+				action = redo.pop();
+			}
+
+			// Remove the curent layers
+			stage.destroyChildren();
+
+			// Restore the local layers
+			for (var i in action.localLayers){
+				stage.add(Kinetic.Node.create(action.localLayers[i]));
+				stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('zIndex'));
+			}
+
+			// Restore the global layers
+			for (var j in action.globalLayers){
+				stage.add(Kinetic.Node.create(action.globalLayers[j]));
+				stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('zIndex'));
+			}
+
+			// Restore the active layer
+			for (var k in stage.children){
+				if (typeof stage.children[k] === 'object' &&
+					stage.children[k].getAttr('index') === platform.activeLayer.getAttr('index')){
+					
+					platform.activeLayer = stage.children[k];
+				}
+			}
+
+			// Rebuild the layer model used by the platform
+			platform.layers.rebuildLayerModel();
+
+			// Redraw the scene
+			stage.drawScene();
+		}
+	},
+
 	/**
 	 * Function to initialise the drawing platform
 	 */
@@ -362,18 +586,15 @@ var platform = {
 
 		// Add the layers to the stage
 		for (var i in platform.layers.globalLayers) {
-			platform.layers.addLayer(platform.layers.globalLayers[i], true, true);
+			platform.layers.addLayer(platform.layers.globalLayers[i], true, true, true);
 		}
 
+		platform.history.addToHistory();
+
 		// Set the active layer
-		platform.activeLayer = platform.layers.globalLayers.background;
+		platform.activeLayer = platform.layers.globalLayers['globalLayer0'];
 
-		var stageContent  = $(platform.stage.getContent());
-
-		// Add event listeners
-		stageContent.on("mousedown mouseenter", platform.drawLine.onMouseDown);
-		stageContent.on("mouseup mouseleave", platform.drawLine.onMouseUp);
-		stageContent.on("mousemove", platform.drawLine.onMouseMove);
+		platform.util.addEventListeners();
 	}
 };
 
