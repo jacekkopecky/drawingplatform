@@ -15,14 +15,89 @@ var platform = {
 		changeBrushSize: function(brushSize){
 			this.brushSize = brushSize;
 		},
+		/**
+		 * Function to change the color of the brush using a hex value
+		 *
+		 * @param String brushColorHex
+		 */
 		changeBrushColorHex: function(brushColorHex){
-			if (/^([0-9a-f]{6})$/i.test(brushColorHex)){
-				this.brushColorHex = brushColorHex;
-			} else {
-				alert('Please enter a valid hex color value');
+			// If color is an object then we need to get the value
+			if (typeof brushColorHex === 'object') {
+				brushColorHex = $('#brushColorHex').val();
 			}
-				
-			
+
+			// Test if the hex is valid and change the brush color
+			if (/^([0-9a-f]{6})$/i.test(brushColorHex)){
+				platform.brush.brushColorHex = brushColorHex;
+				platform.brush.hexToRGB(brushColorHex);
+			} else {
+				alert('Please enter a valid hex color value, not: ' + brushColorHex);
+			}
+		},
+		/** 
+		 * Converts a hex color value to RGB
+		 *
+		 * @param String hex
+		 */
+		hexToRGB: function(hex){
+			var r = parseInt(hex.slice(0,2), 16);
+			var g = parseInt(hex.slice(2,4), 16);
+			var b = parseInt(hex.slice(4,6), 16);
+
+			$('#brushColorRed').val(r);
+			$('#brushColorGreen').val(g);
+			$('#brushColorBlue').val(b);
+		},
+		/**
+		 * Converts RGB values to a hex color
+		 */
+		RGBToHex: function(){
+			var r = $('#brushColorRed').val();
+			var g = $('#brushColorGreen').val();
+			var b = $('#brushColorBlue').val();
+
+			// Check that RGB are all numbers
+			if (isNaN(r) || isNaN(g) || isNaN(b)){
+				return false;
+			}
+
+			// Set any numbers greater than 255 to 255
+			if (r > 255) {
+				r = 255;
+				$('#brushColorRed').val(r);
+			}
+
+			if (g > 255) {
+				g = 255;
+				$('#brushColorGreen').val(g);
+			}
+
+			if (b > 255) {
+				b = 255;
+				$('#brushColorBlue').val(b);
+			}
+
+			// Convert from dec to hex
+			r = parseInt(r, 10).toString(16);
+			g = parseInt(g, 10).toString(16);
+			b = parseInt(b, 10).toString(16);
+
+			// Pad any hex numbers that are less than 10
+			if (r.length === 1) {
+				r = '0' + r;
+			}
+
+			if (g.length === 1) {
+				g = '0' + g;
+			}
+
+			if (b.length === 1) {
+				b = '0' + b;
+			}
+
+			// Create the hex string and change the brush color
+			var hex = r + g + b;
+			platform.brush.changeBrushColorHex(hex);
 		}
 	},
 
@@ -414,13 +489,10 @@ var platform = {
 			$('#brushSizeInput').val(platform.brush.brushSize);
 			$('#brushSizeInput').on('change keyup', function(){platform.brush.changeBrushSize($(this).val());});
 
-			$('#brushColorHex').val(platform.brush.brushColorHex);
-			$('#brushColorHex').on('change keyup', function(){
-				var val = $(this).val();
-				if (val.length >= 6) {
-					platform.brush.changeBrushColorHex(val);
-				} 
-			});
+			$('#brushColorHex').on('change keyup', platform.brush.changeBrushColorHex);
+			$('#brushColorHex').val(platform.brush.brushColorHex).change();
+
+			$('#brushColorRed, #brushColorGreen, #brushColorBlue').on('change keyup', platform.brush.RGBToHex);
 
 			$('#saveToPNG').on('click', platform.util.saveToPNG);
 
