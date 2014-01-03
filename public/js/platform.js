@@ -318,6 +318,7 @@ var platform = {
 			}
 		}
 	},
+
 	util: {
 		/**
 		 * Function to get the mouse position when entering the stage as KineticJS doesn't
@@ -404,6 +405,8 @@ var platform = {
 			$('#brushSizeInput').val(platform.brush.brushSize);
 			$('#brushSizeInput').on('change keyup', function(){platform.brush.changeBrushSize($(this).val());});
 
+			$('#saveToPNG').on('click', platform.util.saveToPNG);
+
 		},
 		restrictToNumericInput: function(){
 			// Only allow numeric key entry for fields with .numericOnly class
@@ -426,6 +429,14 @@ var platform = {
 	                return false;
 	            }
 	        });
+		},
+		saveToPNG: function(){
+			platform.stage.toDataURL({
+				mimeType: 'image/png',
+				callback: function(dataUrl){
+					window.open(dataUrl);
+				}
+			});
 		}
 	},
 
