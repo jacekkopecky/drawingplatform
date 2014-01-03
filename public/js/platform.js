@@ -9,11 +9,20 @@ var platform = {
 
 	// Brush object settings
 	brush: {
-		brushColor: 'black',
+		brushColorHex: '000000',
 		brushSize: 3,
 		brushType: 'round',
 		changeBrushSize: function(brushSize){
 			this.brushSize = brushSize;
+		},
+		changeBrushColorHex: function(brushColorHex){
+			if (/^([0-9a-f]{6})$/i.test(brushColorHex)){
+				this.brushColorHex = brushColorHex;
+			} else {
+				alert('Please enter a valid hex color value');
+			}
+				
+			
 		}
 	},
 
@@ -241,7 +250,7 @@ var platform = {
 				// Initialise the new line
 				platform.drawLine.newLine = new Kinetic.Line({
 					points: platform.drawLine.points,
-					stroke: platform.brush.brushColor,
+					stroke: platform.brush.brushColorHex,
 					strokeWidth: platform.brush.brushSize,
 					lineCap: platform.brush.brushType,
 					lineJoin: platform.brush.brushType
@@ -283,7 +292,7 @@ var platform = {
 						var circle = new Kinetic.Circle({
 							x: platform.drawLine.points[0].x,
 							y: platform.drawLine.points[0].y,
-							fill: platform.brush.brushColor,
+							fill: platform.brush.brushColorHex,
 							radius: platform.brush.brushSize / 2
 						});
 						platform.activeLayer.add(circle);
@@ -404,6 +413,14 @@ var platform = {
 
 			$('#brushSizeInput').val(platform.brush.brushSize);
 			$('#brushSizeInput').on('change keyup', function(){platform.brush.changeBrushSize($(this).val());});
+
+			$('#brushColorHex').val(platform.brush.brushColorHex);
+			$('#brushColorHex').on('change keyup', function(){
+				var val = $(this).val();
+				if (val.length >= 6) {
+					platform.brush.changeBrushColorHex(val);
+				} 
+			});
 
 			$('#saveToPNG').on('click', platform.util.saveToPNG);
 

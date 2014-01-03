@@ -16,3 +16,7 @@ html, body{
 	height: 5%;
 	padding-top: 6px;
 }
+
+.input-group-sm>.input-group-addon{
+	padding: 5px 8px;
+}
