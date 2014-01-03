@@ -26,7 +26,17 @@
 			  <span class="glyphicon glyphicon-forward"></span>
 			</button>
 		</div>
-		<div class="UIelement col-md-1" id="leftNav"></div>
+		<div class="UIelement col-md-1" id="leftNav">
+			<form>
+				<div class="form-group">
+					<label>Brush size</label>
+					<div class="input-group input-group-sm">
+			  			<input type="number" min="1" step="1" class="form-control" id="brushSizeInput">
+						<span class="input-group-addon">px</span>
+					</div>				
+				</div>
+			</form>
+		</div>
 		<div class="UIelement col-md-9" id="viewport"><div id="stage"></div></div>
 		<div class="UIelement col-md-2" id="rightNav">Right nav</div>
 	</div>

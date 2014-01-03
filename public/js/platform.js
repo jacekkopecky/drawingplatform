@@ -11,7 +11,10 @@ var platform = {
 	brush: {
 		brushColor: 'black',
 		brushSize: 3,
-		brushType: 'round'
+		brushType: 'round',
+		changeBrushSize: function(brushSize){
+			this.brushSize = brushSize;
+		}
 	},
 
 	// Collection of layers
@@ -395,6 +398,34 @@ var platform = {
 			$('#userRedoButton').on('click', platform.history.redoLastAction);
 			$('#globalUndoButton').on('click', function(){platform.history.undoLastAction(true);});
 			$('#globalRedoButton').on('click', function(){platform.history.redoLastAction(true);});
+
+			$('form').on('submit', function(event){event.preventDefault();});
+
+			$('#brushSizeInput').val(platform.brush.brushSize);
+			$('#brushSizeInput').on('change keyup', function(){platform.brush.changeBrushSize($(this).val());});
+
+		},
+		restrictToNumericInput: function(){
+			// Only allow numeric key entry for fields with .numericOnly class
+	        $('input[type="number"]').keydown(function(e) {
+	            
+	            if ((e.keyCode >= 48 && e.keyCode <= 57) //numbers
+	                    || (e.keyCode >= 96 && e.keyCode <= 105)  //numpad number              
+	                    || e.keyCode == 8 //backspace
+	                    || e.keyCode == 9 //tab
+	                    || e.keyCode == 13 //enter
+	                    || e.keyCode == 16 //shift
+	                    || e.keyCode == 37 //arrow left
+	                    || e.keyCode == 39 //arrow right
+	                    || e.keyCode == 46 //delete
+	                    || e.keyCode == 110 //decimal point
+	                    || e.keyCode == 190 //full stop
+	                ) {
+	                
+	            } else {
+	                return false;
+	            }
+	        });
 		}
 	},
 
@@ -600,6 +631,8 @@ var platform = {
 		platform.activeLayer = platform.layers.globalLayers['globalLayer0'];
 
 		platform.util.addEventListeners();
+		platform.util.restrictToNumericInput();
+
 		$('button').tooltip();
 		if (user.securityProfile > 1) {
 			$('.owner').prop('disabled', true);
