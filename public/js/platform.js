@@ -39,6 +39,7 @@ var platform = {
 			if (/^([0-9a-f]{6})$/i.test(brushColorHex)){
 				platform.brush.brushColorHex = brushColorHex;
 				if (updateRGB) platform.brush.hexToRGB(brushColorHex, updateHSL);
+				$('#brushColorLabel').css('color', '#' + brushColorHex);
 				return true;
 			} else {
 				alert('Please enter a valid hex color value, not: ' + brushColorHex);
