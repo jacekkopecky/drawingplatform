@@ -18,5 +18,14 @@ html, body{
 }
 
 .input-group-sm>.input-group-addon{
-	padding: 5px 8px;
+	padding: 5px 2px;
+}
+
+#leftNav .input-group{
+	width: 104%;
+}
+
+#leftNav{
+	padding-left: 3px;
+	padding-right: 3px;
 }

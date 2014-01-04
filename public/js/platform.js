@@ -19,27 +19,39 @@ var platform = {
 		 * Function to change the color of the brush using a hex value
 		 *
 		 * @param String brushColorHex
+		 * @param boolean updateRGB
+		 * @param boolean updateHSL
+		 * @return boolean
 		 */
-		changeBrushColorHex: function(brushColorHex){
+		changeBrushColorHex: function(brushColorHex, updateRGB, updateHSL){
 			// If color is an object then we need to get the value
 			if (typeof brushColorHex === 'object') {
 				brushColorHex = $('#brushColorHex').val();
+				updateRGB = true;
+				updateHSL = true;
+			}
+
+			if (brushColorHex.length < 6) {
+				return false;
 			}
 
 			// Test if the hex is valid and change the brush color
 			if (/^([0-9a-f]{6})$/i.test(brushColorHex)){
 				platform.brush.brushColorHex = brushColorHex;
-				platform.brush.hexToRGB(brushColorHex);
+				if (updateRGB) platform.brush.hexToRGB(brushColorHex, updateHSL);
+				return true;
 			} else {
 				alert('Please enter a valid hex color value, not: ' + brushColorHex);
+				return false;
 			}
 		},
 		/** 
 		 * Converts a hex color value to RGB
 		 *
 		 * @param String hex
+		 * @param boolean updateHSL
 		 */
-		hexToRGB: function(hex){
+		hexToRGB: function(hex, updateHSL){
 			var r = parseInt(hex.slice(0,2), 16);
 			var g = parseInt(hex.slice(2,4), 16);
 			var b = parseInt(hex.slice(4,6), 16);
@@ -47,14 +59,74 @@ var platform = {
 			$('#brushColorRed').val(r);
 			$('#brushColorGreen').val(g);
 			$('#brushColorBlue').val(b);
+
+			if (updateHSL) platform.brush.RGBToHSL(r, g, b);
 		},
 		/**
 		 * Converts RGB values to a hex color
 		 */
-		RGBToHex: function(){
-			var r = $('#brushColorRed').val();
-			var g = $('#brushColorGreen').val();
-			var b = $('#brushColorBlue').val();
+		RGBToHex: function(updateHSL){
+			var r = parseInt($('#brushColorRed').val(), 10);
+			var g = parseInt($('#brushColorGreen').val(), 10);
+			var b = parseInt($('#brushColorBlue').val(), 10);
+
+			// Do nothing if NaNs are present
+			if (isNaN(r) || isNaN(g) || isNaN(b)) {
+				return false;
+			}
+
+			// Set any numbers greater than 255 to 255
+			if (r > 255) {
+				r = 255;
+				$('#brushColorRed').val(r);
+			}
+
+			if (g > 255) {
+				g = 255;
+				$('#brushColorGreen').val(g);
+			}
+
+			if (b > 255) {
+				b = 255;
+				$('#brushColorBlue').val(b);
+			}
+
+			// Update the HSL values if needed
+			if (updateHSL) platform.brush.RGBToHSL(r, g, b);
+
+			// Convert from dec to hex
+			r = r.toString(16);
+			g = g.toString(16);
+			b = b.toString(16);
+
+			// Pad any hex numbers that are less than 10
+			if (r.length === 1) {
+				r = '0' + r;
+			}
+
+			if (g.length === 1) {
+				g = '0' + g;
+			}
+
+			if (b.length === 1) {
+				b = '0' + b;
+			}
+
+			// Create the hex string and change the brush color
+			var hex = r + g + b;
+
+			if (platform.brush.changeBrushColorHex(hex)) $('#brushColorHex').val(hex);
+		},
+		/** 
+		 * Function to convert from RGB to HSL
+		 *
+		 * @param int r
+		 * @param int g
+		 * @param int b
+		 * @return boolean
+		 */
+		RGBToHSL: function(r, g, b){
+			var hue, sat, lum, max, min;
 
 			// Check that RGB are all numbers
 			if (isNaN(r) || isNaN(g) || isNaN(b)){
@@ -77,28 +149,128 @@ var platform = {
 				$('#brushColorBlue').val(b);
 			}
 
-			// Convert from dec to hex
-			r = parseInt(r, 10).toString(16);
-			g = parseInt(g, 10).toString(16);
-			b = parseInt(b, 10).toString(16);
+			// Convert RGB to percentages
+			r = r / 255;
+			g = g / 255;
+			b = b / 255;
 
-			// Pad any hex numbers that are less than 10
-			if (r.length === 1) {
-				r = '0' + r;
+			// Find the max and min rgb value
+			max = Math.max(r, g, b);
+			min = Math.min(r, g, b);
+
+			// Calculate the hue and saturation
+			if (max === min) {
+				hue = 0;
+				sat = 0;
+			} else {
+				if (r === max) {
+					hue = (g - b) / (max - min) / 1;
+				} else if (g === max) {
+					hue = 2 + (b - r) / 1 / (max - min) / 1;
+				} else if (b === max) {
+					hue = 4 + (r - g) / (max - min) / 1;
+				}
+				sat = (max - min) / max;
+			}
+			hue = hue * 60;
+			lum = max;
+			if (hue < 0) hue += 360;
+
+			$('#brushColorHue').val(Math.round(hue));
+			$('#brushColorSat').val(Math.round(sat * 100));
+			$('#brushColorLum').val(Math.round(lum * 100));
+		},
+		/**
+		 * Function to convert HSL value to RGB
+		 */
+		HSLToRGB: function(){
+			var r, g, b;
+			var hue = $('#brushColorHue').val();
+			var sat = $('#brushColorSat').val();
+			var lum = $('#brushColorLum').val();
+
+			// Check that HSL are all numbers
+			if (isNaN(hue) || isNaN(sat) || isNaN(lum)){
+				return false;
 			}
 
-			if (g.length === 1) {
-				g = '0' + g;
+			// Set any numbers greater than upper limit to upper limit
+			if (hue < 0 || hue >= 360) {
+				hue = 0;
+				$('#brushColorHue').val(hue);
 			}
 
-			if (b.length === 1) {
-				b = '0' + b;
+			if (sat > 100) {
+				sat = 100;
+				$('#brushColorSat').val(sat);
 			}
 
-			// Create the hex string and change the brush color
-			var hex = r + g + b;
-			platform.brush.changeBrushColorHex(hex);
-		}
+			if (lum > 100) {
+				lum = 100;
+				$('#brushColorLum').val(lum);
+			}
+
+			var hueInterval = Math.floor(hue / 60);
+
+			var f = hue / 60 - hueInterval;
+			
+			if (sat > 1) sat = sat / 100;
+			if (lum > 1) lum = lum / 100;
+			
+			var p = (lum * (1 - sat));
+			var q = (lum * (1 - (f * sat)));
+			var t = (lum * (1 - ((1 - f) * sat)));
+
+			switch (hueInterval) {
+				case 0:
+					r = lum;
+					g = t;
+					b = p;
+					break;
+				case 1:
+					r = q;
+					g = lum;
+					b = p;
+					break;
+				case 2:
+					r = p;
+					g = lum;
+					b = t;
+					break;
+				case 3:
+					r = p;
+					g = q;
+					b = lum;
+					break;
+				case 4:
+					r = t;
+					g = p;
+					b = lum;
+					break;
+				default:
+					r = lum;
+					g = p;
+					b = q;
+					break;
+			}
+
+			if (!sat) {
+				r = lum;
+				g = lum;
+				b = lum;
+			}
+
+			r = Math.round(r * 255);
+			g = Math.round(g * 255);
+			b = Math.round(b * 255);
+
+			$('#brushColorRed').val(r);
+			$('#brushColorGreen').val(g);
+			$('#brushColorBlue').val(b);
+			platform.brush.RGBToHex(false);
+
+		},
+
 	},
 
 	// Collection of layers
@@ -494,30 +666,32 @@ var platform = {
 
 			$('#brushColorRed, #brushColorGreen, #brushColorBlue').on('change keyup', platform.brush.RGBToHex);
 
+			$('#brushColorHue, #brushColorSat, #brushColorLum').on('change keyup', platform.brush.HSLToRGB);
+
 			$('#saveToPNG').on('click', platform.util.saveToPNG);
 
 		},
 		restrictToNumericInput: function(){
 			// Only allow numeric key entry for fields with .numericOnly class
-	        $('input[type="number"]').keydown(function(e) {
-	            
-	            if ((e.keyCode >= 48 && e.keyCode <= 57) //numbers
-	                    || (e.keyCode >= 96 && e.keyCode <= 105)  //numpad number              
-	                    || e.keyCode == 8 //backspace
-	                    || e.keyCode == 9 //tab
-	                    || e.keyCode == 13 //enter
-	                    || e.keyCode == 16 //shift
-	                    || e.keyCode == 37 //arrow left
-	                    || e.keyCode == 39 //arrow right
-	                    || e.keyCode == 46 //delete
-	                    || e.keyCode == 110 //decimal point
-	                    || e.keyCode == 190 //full stop
-	                ) {
-	                
-	            } else {
-	                return false;
-	            }
-	        });
+			$('input[type="number"]').keydown(function(e) {
+				
+				if ((e.keyCode >= 48 && e.keyCode <= 57) //numbers
+						|| (e.keyCode >= 96 && e.keyCode <= 105)  //numpad number              
+						|| e.keyCode == 8 //backspace
+						|| e.keyCode == 9 //tab
+						|| e.keyCode == 13 //enter
+						|| e.keyCode == 16 //shift
+						|| e.keyCode == 37 //arrow left
+						|| e.keyCode == 39 //arrow right
+						|| e.keyCode == 46 //delete
+						|| e.keyCode == 110 //decimal point
+						|| e.keyCode == 190 //full stop
+					) {
+					
+				} else {
+					return false;
+				}
+			});
 		},
 		saveToPNG: function(){
 			platform.stage.toDataURL({
