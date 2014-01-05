@@ -765,14 +765,20 @@ var platform = {
 		 * @TODO - add support for global undo
 		 */
 		undoLastAction: function(global){
-			var history = platform.history.userHistory,
-				redo    = platform.history.userRedo,
-				stage   = platform.stage;
+			var history      = platform.history.userHistory,
+				redo         = platform.history.userRedo,
+				otherHistory = platform.history.globalHistory,
+				otherRedo    = platform.history.globalRedo,
+				stage        = platform.stage;
 
-			// if (global) {
-			// 	history = platform.history.globalHistory;
-			// 	redo = platform.history.globalRedo;
-			// }
+			if (global === true) {
+				history      = platform.history.globalHistory;
+				redo         = platform.history.globalRedo;
+				otherHistory = platform.history.userHistory;
+				otherRedo    = platform.history.userRedo;
+			} else {
+				global = false;
+			}
 
 			// If we are at the beginning of the history we can't undo so show an alert
 			if (history.length === 1) {
@@ -783,6 +789,11 @@ var platform = {
 			// Get the last action and move it to the redo array
 			var action = history.pop();
 			redo.push(action);
+
+			// If the action exists in the other history get rid of it
+			otherHistory = otherHistory.filter(function(element){
+				return element !== action;
+			});
 
 			// Update the action to reference the previous canvas state
 			action = history[history.length-1];
@@ -826,14 +837,20 @@ var platform = {
 		 * @TODO - add support for global redo
 		 */
 		redoLastAction: function(global){
-			var history = platform.history.userHistory,
-				redo    = platform.history.userRedo,
-				stage   = platform.stage;
+			var history      = platform.history.userHistory,
+				redo         = platform.history.userRedo,
+				otherHistory = platform.history.globalHistory,
+				otherRedo    = platform.history.globalRedo,
+				stage        = platform.stage;
 
-			// if (global) {
-			// 	history = platform.history.globalHistory;
-			// 	redo = platform.history.globalRedo;
-			// }
+			if (global === true) {
+				history      = platform.history.globalHistory;
+				redo         = platform.history.globalRedo;
+				otherHistory = platform.history.userHistory;
+				otherRedo    = platform.history.userRedo;
+			} else {
+				global = false;
+			}
 
 			// If no redo array then there is nothing to redo!
 			if (!redo.length) {
@@ -844,6 +861,11 @@ var platform = {
 			// Get the action that is being restored and add it to the history
 			var action = redo.pop();
 			history.push(action);
+
+			// If the action exists in the other redo get rid of it
+			otherRedo = otherRedo.filter(function(element){
+				return element !== otherRedo[i];
+			});
 
 			if (history.length === 1) {
 				action = redo.pop();
