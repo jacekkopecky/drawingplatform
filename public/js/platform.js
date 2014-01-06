@@ -600,7 +600,11 @@ var platform = {
 				layerPreview.find('.layerPreview').children().remove();
 
 				// Add a new preview stage
-				platform.layers.createLayerPreviewStage(layers[i], layerName);
+				if (panelNames.indexOf(layerName) === -1) {
+					platform.layers.addLayerPreview(layers[i], layerName);
+				} else {
+					platform.layers.createLayerPreviewStage(layers[i], layerName);
+				}
 			}
 
 			for (var j in panelNames) {
