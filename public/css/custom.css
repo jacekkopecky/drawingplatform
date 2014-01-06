@@ -29,3 +29,49 @@ html, body{
 	padding-left: 3px;
 	padding-right: 3px;
 }
+
+.layerButtons{
+	float: right;
+	margin-right: 4px;
+}
+
+.layerButtons .btn-xs{
+	padding: 0 2px;
+	margin-left: 4px;
+}
+
+.layerButtons .btn-xs:hover{
+	background: transparent;
+}
+
+.layerPanel{
+	border: 1px solid #333;
+	border-radius: 4px;
+	margin-top: 3px;
+	background: white
+}
+
+.layerPanel label.active{
+	background: lightcoral;
+}
+
+.layerPanel .layerPreview .kineticjs-content{
+	float: left;
+}
+
+.layerPanel label{
+	float: right;
+	margin-top: 3px;
+	margin-right: 4px;
+}
+
+.layerSection{
+	min-height: 92%;
+	max-height: 92%;
+	overflow: scroll;
+}
+
+#newLayerButton{
+	float:right;
+	margin-top: 6px;
+}

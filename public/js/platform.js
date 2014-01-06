@@ -276,6 +276,8 @@ var platform = {
 
 	// Collection of layers
 	layers: {
+		// Code snippet used for creating layer preview panels
+		layerPreviewSnippet: '<div class="layerPanel" id="[LAYER_NAME]"><div class="layerPreview" id="[LAYER_NAME]Preview"></div><label>[LAYER_NAME]</label><div class="layerButtons"><button type="button" class="btn btn-default btn-xs toggleVisible"><span class="glyphicon glyphicon-eye-open"></span></button><button type="button" class="btn btn-default btn-xs toggleGlobalLayer"><span class="glyphicon glyphicon-globe"></span></button><button type="button" class="btn btn-default btn-xs lockLayer"><span class="glyphicon glyphicon-lock"></span></button><button type="button" class="btn btn-default btn-xs deleteLayer"><span class="glyphicon glyphicon-trash"></span></button></div><div style="clear:both"></div></div>',
 		/**
 		 * Function to create a white background layer the size of the canvas
 		 */
@@ -289,7 +291,7 @@ var platform = {
 				fill: 'white',
 			});
 			background.add(rectangle);
-			this.globalLayers['globalLayer0'] = background;
+			this.globalLayers.globalLayer1 = background;
 		},
 		/**
 		 * Function to add a layer to the canvas
@@ -299,41 +301,68 @@ var platform = {
 		 */
 		addLayer: function(layer, global, securityOverride, historyOverride){
 			try {
+				// Check if user can add layeres
 				if (!securityOverride) {
 					platform.util.isContributor(user);
 				}
-				var key = Object.keys(this.globalLayers).length + Object.keys(this.localLayers).length;
 
-				if (!layer){
+				// Work out the layer's key
+				var key = Object.keys(platform.layers.globalLayers).length + Object.keys(platform.layers.localLayers).length;
+				
+				var layerName = '';
+				// Check if the passed layer variable is a Kinetic.Layer
+				if (layer.nodeType !== 'Layer'){
 					layer = new Kinetic.Layer();
 					
-
-					if (global) {
+					// Work out layer name is and add to the correct layers object
+					if (global === true) {
+						layerName = 'globalLayer';
 						if (!securityOverride) {
 							platform.util.isSessionOwner(user);
 						}
 						layer.setAttr('global', true);
 
-						while (typeof this.globalLayers["globalLayer" + key] === "object"){
+						while (typeof platform.layers.globalLayers["globalLayer" + key] === "object"){
 							key++;
 						}
-
-						this.globalLayers["globalLayer" + key] = layer;
+						layerName += key;
+						platform.layers.globalLayers[layerName] = layer;
 					} else {
+						layerName = 'localLayer';
 						layer.setAttr('local', true);
 						layer.setAttr('owner', user.username);
 
-						while (typeof this.localLayers["localLayer" + key] === "object"){
+						while (typeof platform.layers.localLayers["localLayer" + key] === "object"){
 							key++;
 						}
-						this.localLayers["localLayer" + key] = layer;
+						layerName += key;
+						platform.layers.localLayers[layerName] = layer;
 					}
+				} else {
+					// Work out the layer name
+					if (layer.getAttr('global')) {
+						layerName += 'globalLayer';
+					} else {
+						layerName += 'localLayer';
+					}
+					layerName += key;
 				}
+
+				// Add the layer to the stage and redraw
 				platform.stage.add(layer);
 				layer.drawScene();
-				layer.setAttr('zIndex', layer.getZIndex());
+
+				// Store the zindex and key number so that we can keep things organised when undo / redo-ing
+				layer.setAttr('Z-Index', layer.getZIndex());
 				layer.setAttr('layerObjectKey', key);
+
+				// Make the new layer the active layer
 				platform.activeLayer = layer;
+
+				// Create a preview of the new layer
+				platform.layers.addLayerPreview(layer, layerName);
+
+				// Add to history
 				if (!historyOverride) platform.history.addToHistory();
 			} catch(error) {
 				alert(error.message);
@@ -364,7 +393,29 @@ var platform = {
 				} else {
 					layer.setAttr('locked', true);
 				}
-				platform.history.addToHistory();
+				return true;
+				
+			} catch(error){
+				alert(error.message);
+				return false;
+			}
+		},
+		/**
+		 * Function to toggle a layer as being global
+		 *
+		 * @param Kinetic.Layer layer
+		 * @return boolean
+		 */
+		toggleGlobalLayer: function(layer){
+			try{
+				// Check user can modify global layers
+				platform.util.isSessionOwner(user);
+				
+				if (layer.getAttr('global')) {
+					layer.setAttr('global', false);
+				} else {
+					layer.setAttr('global', true);
+				}
 				return true;
 				
 			} catch(error){
@@ -381,6 +432,12 @@ var platform = {
 		deleteLayer: function(layer){
 			try{
 				platform.util.isLayerLocked(layer);
+
+				// Make sure we always have a layer on the stage
+				if ((Object.keys(this.globalLayers).length === 1 && !Object.keys(this.localLayers).length) ||
+					(Object.keys(this.localLayers).length === 1 && !Object.keys(this.globalLayers).length)) {
+					throw new Error('Can\'t delete as there would be no layers left!');
+				}
 
 				if (layer.getAttr('global')) {
 					// Check user can delete global layers
@@ -439,6 +496,115 @@ var platform = {
 				} else {
 					this.localLayers['localLayer' + currentLayers[i].getAttr('layerObjectKey')] = currentLayers[i];
 				}
+			}
+
+			// Rejig the layer preview panels to work with updated stage
+			this.rebuildLayerPreviews(currentLayers);
+		},
+		/**
+		 * Function to add a new layer preview panel to the right hand nav
+		 *
+		 * @param Kinetic.Layer layer
+		 * @param String layerName
+		 */
+		addLayerPreview: function(layer, layerName){
+			// Update the preview panel snippet and add it to the DOM
+			var layerPreview = platform.layers.layerPreviewSnippet.replace(/\[LAYER_NAME\]/g, layerName);
+			$('.layerSection').prepend(layerPreview);
+			
+			if (layerName === 'globalLayer1') {
+				$('#globalLayer1 label').text('background');
+			}
+
+			// Create the preview panel's stage and add event listeners to the buttons
+			platform.layers.createLayerPreviewStage(layer, layerName);
+			platform.util.addLayerButtonEvents(layerName);
+		},
+		/**
+		 * Updates the preview panel of a given layer
+		 *
+		 * @param Kinetic.Layer layer
+		 */
+		updateLayerPreview: function(layer){
+			// Get the preview stage and clone the layer
+			var layerPreviewStage = layer.getAttr('preview');
+			var clone = layer.clone({preview: null});
+
+			// Shrink the preview layer to fit in the provided space
+			clone.setScale(0.09);
+
+			// Remove the existing preview, add the new one and redraw
+			layerPreviewStage.destroyChildren();
+			layerPreviewStage.add(clone);
+			clone.drawScene();
+		},
+		/**
+		 * Function to create the stage used by a given preview panel
+		 *
+		 * @param Kinetic.Layer layer
+		 * @param String layerName
+		 */
+		createLayerPreviewStage: function(layer, layerName){
+			// Create the stage
+			var layerPreviewStage = new Kinetic.Stage({
+				container: layerName + 'Preview',
+				width: 75,
+				height: 50
+			});
+
+			// Clone the layer
+			var clone = layer.clone({preview: null});
+
+			// Shrink the clone to fit in the space provided and add to preview stage
+			clone.setScale(0.09);
+			layerPreviewStage.add(clone);
+			clone.drawScene();
+
+			// Reference the preview stage in the original layer
+			layer.setAttr('preview', layerPreviewStage);
+
+			// Toggle the panel's global toggle button if required
+			if (layer.getAttr('global')) {
+				$('#' + layerName + ' .toggleGlobalLayer').addClass('active');
+			}
+		},
+		/**
+		 * Rebuilds the layer previews
+		 *
+		 * @param Array[Kinetic.Layer] layers
+		 */
+		rebuildLayerPreviews: function(layers){
+			for (var i in layers){
+				// Ignore anything that isn't a layer
+				if (typeof layers[i] !== 'object') continue;
+
+				// Work out the layer name
+				var layerName = '';
+				if (layers[i].getAttr('global')){
+					layerName += 'globalLayer' + layers[i].getAttr('layerObjectKey');
+				} else {
+					layerName += 'localLayer' + layers[i].getAttr('layerObjectKey');
+				}
+
+				// Remove the existing preview stage
+				layerPreview = $('#' + layerName);
+				layerPreview.find('.layerPreview').children().remove();
+
+				// Add a new preview stage
+				platform.layers.createLayerPreviewStage(layers[i], layerName);
+			}
+		},
+		/**
+		 * Function to get a layer from the platforms layers objects
+		 *
+		 * @param String layerName
+		 * @param boolean global
+		 */
+		getLayer: function(layerName, global){
+			if (global) {
+				return platform.layers.globalLayers[layerName];
+			} else {
+				return platform.layers.localLayers[layerName];
 			}
 		},
 		globalLayers: {},
@@ -555,7 +721,7 @@ var platform = {
 
 			// Redraw the active layer
 			platform.activeLayer.drawScene();
-
+			platform.layers.updateLayerPreview(platform.activeLayer);
 			// add updated layer to history
 			if (addToHistory) {
 				platform.history.addToHistory(platform.activeLayer);
@@ -627,7 +793,7 @@ var platform = {
 		 * @throws Error
 		 */
 		isLayerOwner: function(layer, user, callback){
-			if (layer.getAttr('owner') !== user.username) {
+			if (layer.getAttr('owner') !== user.username && user.securityProfile > 1) {
 				throw new Error('Must own layer to make changes');
 			}
 			if (callback) callback();
@@ -643,6 +809,7 @@ var platform = {
 				throw new Error('Layer is locked');
 			}
 		},
+		// Adds event listeners to the the stage and UI elements
 		addEventListeners: function(){
 			
 			var stageContent  = $(platform.stage.getContent());
@@ -671,6 +838,73 @@ var platform = {
 
 			$('#saveToPNG').on('click', platform.util.saveToPNG);
 
+			$('#newLayerButton').on('click', platform.layers.addLayer);
+
+		},
+		/**
+		 * Function to add event listeners to the buttons on a layer preview panel
+		 * 
+		 * @param string layerName
+		 */
+		addLayerButtonEvents: function(layerName){
+			if (!layerName) return false;
+			
+			var global = false;
+			if (layerName.indexOf('global') !== -1) {
+				global = true;
+			}
+
+			var previewDiv = $('#' + layerName);
+			var toggleVisibleButton = previewDiv.find('.toggleVisible');
+			var toggleGlobalLayerButton = previewDiv.find('.toggleGlobalLayer');
+			var lockLayerButton = previewDiv.find('.lockLayer');
+			var deleteLayerButton = previewDiv.find('.deleteLayer');
+
+			previewDiv.on('click', function(){
+				var layer = platform.layers.getLayer(layerName, global);
+				$('.layerSection .layerPanel label.active').removeClass('active');
+				previewDiv.find('label').addClass('active');
+				platform.activeLayer = layer;
+			});
+			previewDiv.click();
+			
+			toggleVisibleButton.on('click', function(){
+				var layer = platform.layers.getLayer(layerName, global);
+				if (layer.isVisible()){
+					layer.hide();
+				} else {
+					layer.show();
+				}
+				$(this).toggleClass('active');
+
+			});
+
+			toggleGlobalLayerButton.on('click', function(){
+				var layer = platform.layers.getLayer(layerName, global);
+				if (platform.layers.toggleGlobalLayer(layer)){
+					$(this).toggleClass('active');
+				}
+			});
+
+			lockLayerButton.on('click', function(){
+				var layer = platform.layers.getLayer(layerName, global);
+				if (platform.layers.lockLayer(layer)){
+					$(this).toggleClass('active');
+				}
+			});
+
+			deleteLayerButton.on('click', function(){
+				if (layerName === 'globalLayer1') {
+					alert('This layer cannot be deleted');
+					return false;
+				}
+				if (confirm('Are you sure you want to delete this layer?')){
+					var layer = platform.layers.getLayer(layerName, global);
+					if (platform.layers.deleteLayer(layer)) {
+						previewDiv.remove();
+					}
+				}
+			});
 		},
 		restrictToNumericInput: function(){
 			// Only allow numeric key entry for fields with .numericOnly class
@@ -804,19 +1038,19 @@ var platform = {
 			// Restore the local layers from the JSON
 			for (var i in action.localLayers){
 				stage.add(Kinetic.Node.create(action.localLayers[i]));
-				stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('zIndex'));
+				stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('Z-Index'));
 			}
 
 			// Restore the global layers from the JSON
 			for (var j in action.globalLayers){
 				stage.add(Kinetic.Node.create(action.globalLayers[j]));
-				stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('zIndex'));
+				stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('Z-Index'));
 			}
 
 			// Restore the active layer
 			for (var k in stage.children){
 				if (typeof stage.children[k] === 'object' &&
-					stage.children[k].getAttr('zIndex') === platform.activeLayer.getAttr('zIndex')){
+					stage.children[k].getAttr('Z-Index') === platform.activeLayer.getAttr('Z-Index')){
 					platform.activeLayer = stage.children[k];
 				}
 			}
@@ -877,19 +1111,19 @@ var platform = {
 			// Restore the local layers
 			for (var i in action.localLayers){
 				stage.add(Kinetic.Node.create(action.localLayers[i]));
-				stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('zIndex'));
+				stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('Z-Index'));
 			}
 
 			// Restore the global layers
 			for (var j in action.globalLayers){
 				stage.add(Kinetic.Node.create(action.globalLayers[j]));
-				stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('zIndex'));
+				stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('Z-Index'));
 			}
 
 			// Restore the active layer
 			for (var k in stage.children){
 				if (typeof stage.children[k] === 'object' &&
-					stage.children[k].getAttr('index') === platform.activeLayer.getAttr('index')){
+					stage.children[k].getAttr('Z-Index') === platform.activeLayer.getAttr('Z-Index')){
 					
 					platform.activeLayer = stage.children[k];
 				}
@@ -925,7 +1159,8 @@ var platform = {
 		platform.history.addToHistory();
 
 		// Set the active layer
-		platform.activeLayer = platform.layers.globalLayers['globalLayer0'];
+		for (first in platform.layers.globalLayers) break;
+		platform.activeLayer = platform.layers.globalLayers[first];
 
 		platform.util.addEventListeners();
 		platform.util.restrictToNumericInput();
