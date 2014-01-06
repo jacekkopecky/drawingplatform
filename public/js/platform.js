@@ -500,6 +500,8 @@ var platform = {
 
 			// Rejig the layer preview panels to work with updated stage
 			this.rebuildLayerPreviews(currentLayers);
+
+			platform.activeLayer.getAttr('preview').getContainer().click();
 		},
 		/**
 		 * Function to add a new layer preview panel to the right hand nav
@@ -574,6 +576,11 @@ var platform = {
 		 * @param Array[Kinetic.Layer] layers
 		 */
 		rebuildLayerPreviews: function(layers){
+			var panelNames = [], layerNames = [];
+			$('.layerPanel').each(function(){
+				panelNames.push(this.id);
+			});
+
 			for (var i in layers){
 				// Ignore anything that isn't a layer
 				if (typeof layers[i] !== 'object') continue;
@@ -586,12 +593,20 @@ var platform = {
 					layerName += 'localLayer' + layers[i].getAttr('layerObjectKey');
 				}
 
+				layerNames.push(layerName);
+
 				// Remove the existing preview stage
 				layerPreview = $('#' + layerName);
 				layerPreview.find('.layerPreview').children().remove();
 
 				// Add a new preview stage
 				platform.layers.createLayerPreviewStage(layers[i], layerName);
+			}
+
+			for (var j in panelNames) {
+				if (layerNames.indexOf(panelNames[j]) === -1) {
+					$('#' + panelNames[j]).remove();
+				}
 			}
 		},
 		/**
@@ -1048,11 +1063,17 @@ var platform = {
 			}
 
 			// Restore the active layer
+			var madeActive = false;
 			for (var k in stage.children){
 				if (typeof stage.children[k] === 'object' &&
 					stage.children[k].getAttr('Z-Index') === platform.activeLayer.getAttr('Z-Index')){
 					platform.activeLayer = stage.children[k];
+					madeActive = true;
 				}
+			}
+
+			if (!madeActive) {
+				platform.activeLayer = stage.children[stage.children.length - 1];
 			}
 
 			// Rebuild the layer model used by the platform
@@ -1121,12 +1142,18 @@ var platform = {
 			}
 
 			// Restore the active layer
+			var madeActive = false;
 			for (var k in stage.children){
 				if (typeof stage.children[k] === 'object' &&
 					stage.children[k].getAttr('Z-Index') === platform.activeLayer.getAttr('Z-Index')){
 					
 					platform.activeLayer = stage.children[k];
+					madeActive = true;
 				}
+			}
+
+			if (!madeActive) {
+				platform.activeLayer = stage.children[stage.children.length - 1];
 			}
 
 			// Rebuild the layer model used by the platform
