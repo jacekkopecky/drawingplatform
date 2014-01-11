@@ -9,6 +9,7 @@ var platform = {
 
 	// Brush object settings
 	brush: {
+		prevBrushColor: '000000',
 		brushColorHex: '000000',
 		brushSize: 3,
 		brushType: 'round',
@@ -24,6 +25,12 @@ var platform = {
 		 * @return boolean
 		 */
 		changeBrushColorHex: function(brushColorHex, updateRGB, updateHSL){
+			// If we are 'erasing' set the brush to white and don't update the color values
+			if (brushColorHex === 'eraser') {
+				platform.brush.brushColorHex = 'ffffff';
+				return true;
+			}
+
 			// If color is an object then we need to get the value
 			if (typeof brushColorHex === 'object') {
 				brushColorHex = $('#brushColorHex').val();
@@ -858,6 +865,20 @@ var platform = {
 			$('#saveToPNG').on('click', platform.util.saveToPNG);
 
 			$('#newLayerButton').on('click', platform.layers.addLayer);
+
+			$('#brushToolButton').on('click', function(){
+				$("#brushToolButton").addClass('btn-success').removeClass('btn-primary');
+				$("#eraserToolButton").addClass('btn-primary').removeClass('btn-success');
+				platform.brush.brushColorHex = platform.brush.prevBrushColor;
+			});
+			$('#brushToolButton').click();
+
+			$('#eraserToolButton').on('click', function(){
+				$("#eraserToolButton").addClass('btn-success').removeClass('btn-primary');
+				$("#brushToolButton").addClass('btn-primary').removeClass('btn-success');
+				platform.brush.prevBrushColor = platform.brush.brushColorHex;
+				platform.brush.changeBrushColorHex('eraser',false,false);
+			});
 
 		},
 		/**
