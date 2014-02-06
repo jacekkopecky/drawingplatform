@@ -9,9 +9,15 @@
 	<script src="js/bootstrap.min.js"></script>
 	<script src="js/kinetic.js"></script>
 	<script src="js/platform.js"></script>
+
+	<link rel="stylesheet" type="text/css" href="./jasmine/jasmine.css">
+	<script type="text/javascript" src="./jasmine/jasmine.js"></script>
+	<script type="text/javascript" src="./jasmine/jasmine-html.js"></script>
+	<script type="text/javascript" src="./jasmine/boot.js"></script>
+	<script type="text/javascript" src="./jasmine/test.js"></script>
 </head>
 <body>
-	<div class="container">
+	<div class="container" id="workspaceContainer">
 		<div class="col-md-12" id="topNav">
 			<button type="button" class="btn btn-danger btn-xs owner" id="globalUndoButton" data-toggle="tooltip" data-placement="bottom" data-original-title="Global undo">
 			  <span class="glyphicon glyphicon-backward"></span>
@@ -70,8 +76,8 @@
 			  			<span class="input-group-addon">%</span>
 					</div>
 					<div class="input-group input-group-sm">
-			  			<span class="input-group-addon">Lum</span>
-			  			<input type="number" min="0" max="100" class="form-control" id="brushColorLum">
+			  			<span class="input-group-addon">Val</span>
+			  			<input type="number" min="0" max="100" class="form-control" id="brushColorVal">
 			  			<span class="input-group-addon">%</span>
 					</div>				
 				</div>

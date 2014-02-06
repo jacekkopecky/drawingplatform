@@ -9,6 +9,7 @@ var platform = {
 
 	// Brush object settings
 	brush: {
+		isErasing: false,
 		prevBrushColor: '000000',
 		brushColorHex: '000000',
 		brushSize: 3,
@@ -21,10 +22,10 @@ var platform = {
 		 *
 		 * @param String brushColorHex
 		 * @param boolean updateRGB
-		 * @param boolean updateHSL
+		 * @param boolean updateHSV
 		 * @return boolean
 		 */
-		changeBrushColorHex: function(brushColorHex, updateRGB, updateHSL){
+		changeBrushColorHex: function(brushColorHex, updateRGB, updateHSV){
 			// If we are 'erasing' set the brush to white and don't update the color values
 			if (brushColorHex === 'eraser') {
 				platform.brush.brushColorHex = 'ffffff';
@@ -35,7 +36,7 @@ var platform = {
 			if (typeof brushColorHex === 'object') {
 				brushColorHex = $('#brushColorHex').val();
 				updateRGB = true;
-				updateHSL = true;
+				updateHSV = true;
 			}
 
 			if (brushColorHex.length < 6) {
@@ -45,7 +46,7 @@ var platform = {
 			// Test if the hex is valid and change the brush color
 			if (/^([0-9a-f]{6})$/i.test(brushColorHex)){
 				platform.brush.brushColorHex = brushColorHex;
-				if (updateRGB) platform.brush.hexToRGB(brushColorHex, updateHSL);
+				if (updateRGB) platform.brush.hexToRGB(brushColorHex, updateHSV);
 				$('#brushColorLabel').css('color', '#' + brushColorHex);
 				return true;
 			} else {
@@ -57,9 +58,9 @@ var platform = {
 		 * Converts a hex color value to RGB
 		 *
 		 * @param String hex
-		 * @param boolean updateHSL
+		 * @param boolean updateHSV
 		 */
-		hexToRGB: function(hex, updateHSL){
+		hexToRGB: function(hex, updateHSV){
 			var r = parseInt(hex.slice(0,2), 16);
 			var g = parseInt(hex.slice(2,4), 16);
 			var b = parseInt(hex.slice(4,6), 16);
@@ -68,12 +69,12 @@ var platform = {
 			$('#brushColorGreen').val(g);
 			$('#brushColorBlue').val(b);
 
-			if (updateHSL) platform.brush.RGBToHSL(r, g, b);
+			if (updateHSV) platform.brush.RGBToHSV(r, g, b);
 		},
 		/**
 		 * Converts RGB values to a hex color
 		 */
-		RGBToHex: function(updateHSL){
+		RGBToHex: function(updateHSV){
 			var r = parseInt($('#brushColorRed').val(), 10);
 			var g = parseInt($('#brushColorGreen').val(), 10);
 			var b = parseInt($('#brushColorBlue').val(), 10);
@@ -99,8 +100,8 @@ var platform = {
 				$('#brushColorBlue').val(b);
 			}
 
-			// Update the HSL values if needed
-			if (updateHSL) platform.brush.RGBToHSL(r, g, b);
+			// Update the HSV values if needed
+			if (updateHSV) platform.brush.RGBToHSV(r, g, b);
 
 			// Convert from dec to hex
 			r = r.toString(16);
@@ -126,15 +127,15 @@ var platform = {
 			if (platform.brush.changeBrushColorHex(hex)) $('#brushColorHex').val(hex);
 		},
 		/** 
-		 * Function to convert from RGB to HSL
+		 * Function to convert from RGB to HSV
 		 *
 		 * @param int r
 		 * @param int g
 		 * @param int b
 		 * @return boolean
 		 */
-		RGBToHSL: function(r, g, b){
-			var hue, sat, lum, max, min;
+		RGBToHSV: function(r, g, b){
+			var hue, sat, val, max, min;
 
 			// Check that RGB are all numbers
 			if (isNaN(r) || isNaN(g) || isNaN(b)){
@@ -166,39 +167,37 @@ var platform = {
 			max = Math.max(r, g, b);
 			min = Math.min(r, g, b);
 
-			// Calculate the hue and saturation
-			if (max === min) {
-				hue = 0;
-				sat = 0;
-			} else {
-				if (r === max) {
-					hue = (g - b) / (max - min) / 1;
-				} else if (g === max) {
-					hue = 2 + (b - r) / 1 / (max - min) / 1;
-				} else if (b === max) {
-					hue = 4 + (r - g) / (max - min) / 1;
-				}
-				sat = (max - min) / max;
-			}
-			hue = hue * 60;
-			lum = max;
-			if (hue < 0) hue += 360;
+			hue, sat, val = max;
 
-			$('#brushColorHue').val(Math.round(hue));
+		    var d = max - min;
+		    sat = max == 0 ? 0 : d / max;
+
+		    if(max == min){
+		        hue = 0;
+		    }else{
+		        switch(max){
+		            case r: hue = (g - b) / d + (g < b ? 6 : 0); break;
+		            case g: hue = (b - r) / d + 2; break;
+		            case b: hue = (r - g) / d + 4; break;
+		        }
+		        hue /= 6;
+		    }
+
+			$('#brushColorHue').val(Math.round(hue * 360));
 			$('#brushColorSat').val(Math.round(sat * 100));
-			$('#brushColorLum').val(Math.round(lum * 100));
+			$('#brushColorVal').val(Math.round(val * 100));
 		},
 		/**
-		 * Function to convert HSL value to RGB
+		 * Function to convert HSV value to RGB
 		 */
-		HSLToRGB: function(){
+		HSVToRGB: function(){
 			var r, g, b;
 			var hue = $('#brushColorHue').val();
 			var sat = $('#brushColorSat').val();
-			var lum = $('#brushColorLum').val();
+			var val = $('#brushColorVal').val();
 
-			// Check that HSL are all numbers
-			if (isNaN(hue) || isNaN(sat) || isNaN(lum)){
+			// Check that HSV are all numbers
+			if (isNaN(hue) || isNaN(sat) || isNaN(val)){
 				return false;
 			}
 
@@ -213,64 +212,36 @@ var platform = {
 				$('#brushColorSat').val(sat);
 			}
 
-			if (lum > 100) {
-				lum = 100;
-				$('#brushColorLum').val(lum);
+			if (val > 100) {
+				val = 100;
+				$('#brushColorVal').val(val);
 			}
 
-			var hueInterval = Math.floor(hue / 60);
+			hue /= 360;
+			sat /= 100;
+			val /= 100;
+			var i = Math.floor(hue * 6);
+		    var f = hue * 6 - i;
+		    var p = val * (1 - sat);
+		    var q = val * (1 - f * sat);
+		    var t = val * (1 - (1 - f) * sat);
 
-			var f = hue / 60 - hueInterval;
+		    switch(i % 6){
+		        case 0: r = val, g = t, b = p; break;
+		        case 1: r = q, g = val, b = p; break;
+		        case 2: r = p, g = val, b = t; break;
+		        case 3: r = p, g = q, b = val; break;
+		        case 4: r = t, g = p, b = val; break;
+		        case 5: r = val, g = p, b = q; break;
+		    }
+
+			r = r*255;
+			g = g*255;
+			b = b*255;
 			
-			if (sat > 1) sat = sat / 100;
-			if (lum > 1) lum = lum / 100;
-			
-			var p = (lum * (1 - sat));
-			var q = (lum * (1 - (f * sat)));
-			var t = (lum * (1 - ((1 - f) * sat)));
-
-			switch (hueInterval) {
-				case 0:
-					r = lum;
-					g = t;
-					b = p;
-					break;
-				case 1:
-					r = q;
-					g = lum;
-					b = p;
-					break;
-				case 2:
-					r = p;
-					g = lum;
-					b = t;
-					break;
-				case 3:
-					r = p;
-					g = q;
-					b = lum;
-					break;
-				case 4:
-					r = t;
-					g = p;
-					b = lum;
-					break;
-				default:
-					r = lum;
-					g = p;
-					b = q;
-					break;
-			}
-
-			if (!sat) {
-				r = lum;
-				g = lum;
-				b = lum;
-			}
-
-			r = Math.round(r * 255);
-			g = Math.round(g * 255);
-			b = Math.round(b * 255);
+			r = Math.round(r);
+			g = Math.round(g);
+			b = Math.round(b);
 
 			$('#brushColorRed').val(r);
 			$('#brushColorGreen').val(g);
@@ -278,7 +249,21 @@ var platform = {
 			platform.brush.RGBToHex(false);
 
 		},
-
+		brush: function(){
+			$("#brushToolButton").addClass('btn-success').removeClass('btn-primary');
+			$("#eraserToolButton").addClass('btn-primary').removeClass('btn-success');
+			platform.brush.brushColorHex = platform.brush.prevBrushColor;
+			platform.brush.isErasing = false;
+		},
+		eraser: function(){
+			$("#eraserToolButton").addClass('btn-success').removeClass('btn-primary');
+			$("#brushToolButton").addClass('btn-primary').removeClass('btn-success');
+			if (!platform.brush.isErasing) {
+				platform.brush.prevBrushColor = platform.brush.brushColorHex;
+			}
+			platform.brush.isErasing = true;
+			platform.brush.changeBrushColorHex('eraser',false,false);
+		}
 	},
 
 	// Collection of layers
@@ -860,25 +845,16 @@ var platform = {
 
 			$('#brushColorRed, #brushColorGreen, #brushColorBlue').on('change keyup', platform.brush.RGBToHex);
 
-			$('#brushColorHue, #brushColorSat, #brushColorLum').on('change keyup', platform.brush.HSLToRGB);
+			$('#brushColorHue, #brushColorSat, #brushColorVal').on('change keyup', platform.brush.HSVToRGB);
 
 			$('#saveToPNG').on('click', platform.util.saveToPNG);
 
 			$('#newLayerButton').on('click', platform.layers.addLayer);
 
-			$('#brushToolButton').on('click', function(){
-				$("#brushToolButton").addClass('btn-success').removeClass('btn-primary');
-				$("#eraserToolButton").addClass('btn-primary').removeClass('btn-success');
-				platform.brush.brushColorHex = platform.brush.prevBrushColor;
-			});
+			$('#brushToolButton').on('click', platform.brush.brush);
 			$('#brushToolButton').click();
 
-			$('#eraserToolButton').on('click', function(){
-				$("#eraserToolButton").addClass('btn-success').removeClass('btn-primary');
-				$("#brushToolButton").addClass('btn-primary').removeClass('btn-success');
-				platform.brush.prevBrushColor = platform.brush.brushColorHex;
-				platform.brush.changeBrushColorHex('eraser',false,false);
-			});
+			$('#eraserToolButton').on('click', platform.brush.eraser);
 
 		},
 		/**
@@ -1045,67 +1021,74 @@ var platform = {
 				otherRedo    = platform.history.globalRedo,
 				stage        = platform.stage;
 
-			if (global === true) {
-				history      = platform.history.globalHistory;
-				redo         = platform.history.globalRedo;
-				otherHistory = platform.history.userHistory;
-				otherRedo    = platform.history.userRedo;
-			} else {
-				global = false;
-			}
+			try{
+				platform.util.isContributor(user);
 
-			// If we are at the beginning of the history we can't undo so show an alert
-			if (history.length === 1) {
-				alert('Nothing to undo!');
-				return false;
-			}
-
-			// Get the last action and move it to the redo array
-			var action = history.pop();
-			redo.push(action);
-
-			// If the action exists in the other history get rid of it
-			otherHistory = otherHistory.filter(function(element){
-				return element !== action;
-			});
-
-			// Update the action to reference the previous canvas state
-			action = history[history.length-1];
-
-			// Remove the existing layers from the canvas
-			stage.destroyChildren();
-
-			// Restore the local layers from the JSON
-			for (var i in action.localLayers){
-				stage.add(Kinetic.Node.create(action.localLayers[i]));
-				stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('Z-Index'));
-			}
-
-			// Restore the global layers from the JSON
-			for (var j in action.globalLayers){
-				stage.add(Kinetic.Node.create(action.globalLayers[j]));
-				stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('Z-Index'));
-			}
-
-			// Restore the active layer
-			var madeActive = false;
-			for (var k in stage.children){
-				if (typeof stage.children[k] === 'object' &&
-					stage.children[k].getAttr('Z-Index') === platform.activeLayer.getAttr('Z-Index')){
-					platform.activeLayer = stage.children[k];
-					madeActive = true;
+				if (global === true) {
+					platform.util.isSessionOwner(user);
+					history      = platform.history.globalHistory;
+					redo         = platform.history.globalRedo;
+					otherHistory = platform.history.userHistory;
+					otherRedo    = platform.history.userRedo;
+				} else {
+					global = false;
 				}
+
+				// If we are at the beginning of the history we can't undo so show an alert
+				if (history.length === 1) {
+					alert('Nothing to undo!');
+					return false;
+				}
+
+				// Get the last action and move it to the redo array
+				var action = history.pop();
+				redo.push(action);
+
+				// If the action exists in the other history get rid of it
+				otherHistory = otherHistory.filter(function(element){
+					return element !== action;
+				});
+
+				// Update the action to reference the previous canvas state
+				action = history[history.length-1];
+
+				// Remove the existing layers from the canvas
+				stage.destroyChildren();
+
+				// Restore the local layers from the JSON
+				for (var i in action.localLayers){
+					stage.add(Kinetic.Node.create(action.localLayers[i]));
+					stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('Z-Index'));
+				}
+
+				// Restore the global layers from the JSON
+				for (var j in action.globalLayers){
+					stage.add(Kinetic.Node.create(action.globalLayers[j]));
+					stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('Z-Index'));
+				}
+
+				// Restore the active layer
+				var madeActive = false;
+				for (var k in stage.children){
+					if (typeof stage.children[k] === 'object' &&
+						stage.children[k].getAttr('Z-Index') === platform.activeLayer.getAttr('Z-Index')){
+						platform.activeLayer = stage.children[k];
+						madeActive = true;
+					}
+				}
+
+				if (!madeActive) {
+					platform.activeLayer = stage.children[stage.children.length - 1];
+				}
+
+				// Rebuild the layer model used by the platform
+				platform.layers.rebuildLayerModel();
+
+				// Redraw the canvas
+				stage.drawScene();
+			}catch(e){
+				alert(e.message);
 			}
-
-			if (!madeActive) {
-				platform.activeLayer = stage.children[stage.children.length - 1];
-			}
-
-			// Rebuild the layer model used by the platform
-			platform.layers.rebuildLayerModel();
-
-			// Redraw the canvas
-			stage.drawScene();
 		},
 		/**
 		 * Function to redo the last action. By default redoes the user's last
@@ -1122,77 +1105,83 @@ var platform = {
 				otherHistory = platform.history.globalHistory,
 				otherRedo    = platform.history.globalRedo,
 				stage        = platform.stage;
-
-			if (global === true) {
-				history      = platform.history.globalHistory;
-				redo         = platform.history.globalRedo;
-				otherHistory = platform.history.userHistory;
-				otherRedo    = platform.history.userRedo;
-			} else {
-				global = false;
-			}
-
-			// If no redo array then there is nothing to redo!
-			if (!redo.length) {
-				alert('Nothing to redo!');
-				return false;
-			}
-
-			// Get the action that is being restored and add it to the history
-			var action = redo.pop();
-			history.push(action);
-
-			// If the action exists in the other redo get rid of it
-			otherRedo = otherRedo.filter(function(element){
-				return element !== otherRedo[i];
-			});
-
-			if (history.length === 1) {
-				action = redo.pop();
-			}
-
-			// Remove the curent layers
-			stage.destroyChildren();
-
-			// Restore the local layers
-			for (var i in action.localLayers){
-				stage.add(Kinetic.Node.create(action.localLayers[i]));
-				stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('Z-Index'));
-			}
-
-			// Restore the global layers
-			for (var j in action.globalLayers){
-				stage.add(Kinetic.Node.create(action.globalLayers[j]));
-				stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('Z-Index'));
-			}
-
-			// Restore the active layer
-			var madeActive = false;
-			for (var k in stage.children){
-				if (typeof stage.children[k] === 'object' &&
-					stage.children[k].getAttr('Z-Index') === platform.activeLayer.getAttr('Z-Index')){
-					
-					platform.activeLayer = stage.children[k];
-					madeActive = true;
+			try{
+				platform.util.isContributor(user);
+				if (global === true) {
+					platform.util.isSessionOwner(user);
+					history      = platform.history.globalHistory;
+					redo         = platform.history.globalRedo;
+					otherHistory = platform.history.userHistory;
+					otherRedo    = platform.history.userRedo;
+				} else {
+					global = false;
 				}
+
+				// If no redo array then there is nothing to redo!
+				if (!redo.length) {
+					alert('Nothing to redo!');
+					return false;
+				}
+
+				// Get the action that is being restored and add it to the history
+				var action = redo.pop();
+				history.push(action);
+
+				// If the action exists in the other redo get rid of it
+				otherRedo = otherRedo.filter(function(element){
+					return element !== otherRedo[i];
+				});
+
+				if (history.length === 1) {
+					action = redo.pop();
+				}
+
+				// Remove the curent layers
+				stage.destroyChildren();
+
+				// Restore the local layers
+				for (var i in action.localLayers){
+					stage.add(Kinetic.Node.create(action.localLayers[i]));
+					stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('Z-Index'));
+				}
+
+				// Restore the global layers
+				for (var j in action.globalLayers){
+					stage.add(Kinetic.Node.create(action.globalLayers[j]));
+					stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('Z-Index'));
+				}
+
+				// Restore the active layer
+				var madeActive = false;
+				for (var k in stage.children){
+					if (typeof stage.children[k] === 'object' &&
+						stage.children[k].getAttr('Z-Index') === platform.activeLayer.getAttr('Z-Index')){
+						
+						platform.activeLayer = stage.children[k];
+						madeActive = true;
+					}
+				}
+
+				if (!madeActive) {
+					platform.activeLayer = stage.children[stage.children.length - 1];
+				}
+
+				// Rebuild the layer model used by the platform
+				platform.layers.rebuildLayerModel();
+
+				// Redraw the scene
+				stage.drawScene();
+
+			}catch(exception){
+				alert(exception.message);
 			}
-
-			if (!madeActive) {
-				platform.activeLayer = stage.children[stage.children.length - 1];
-			}
-
-			// Rebuild the layer model used by the platform
-			platform.layers.rebuildLayerModel();
-
-			// Redraw the scene
-			stage.drawScene();
 		}
 	},
 
 	/**
 	 * Function to initialise the drawing platform
 	 */
-	init: function(){
+	init: function(callback){
 		// Create the stage
 		platform.stage = new Kinetic.Stage({
 			container: 'stage',
@@ -1210,6 +1199,9 @@ var platform = {
 
 		platform.history.addToHistory();
 
+		platform.brush.changeBrushSize(3);
+		platform.brush.changeBrushColorHex('000000');
+
 		// Set the active layer
 		for (first in platform.layers.globalLayers) break;
 		platform.activeLayer = platform.layers.globalLayers[first];
@@ -1221,6 +1213,10 @@ var platform = {
 		if (user.securityProfile > 1) {
 			$('.owner').prop('disabled', true);
 		}
+
+		if (callback){
+			callback();
+		}
 	}
 };
 
@@ -1230,4 +1226,9 @@ var user = {
 	profileName: "sessionOwner"
 };
 
-$(document).ready(platform.init);
+var _CONTAINER;
+
+$(document).ready(function(){
+	_CONTAINER = document.getElementById('workspaceContainer').innerHTML;
+	platform.init(testSuite);
+});
