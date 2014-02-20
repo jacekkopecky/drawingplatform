@@ -1,23 +1,44 @@
-function User(options){
+/**
+ * User class
+ *
+ * @param {object} options Options used to create a user
+ */
+function User(options) {
+	// Basic user details
+	this.options = options;
 	this.username = options.username;
 	this.sessionName = options.sessionName;
 	this.securityProfile = options.securityProfile;
 	this.securityProfileName = options.securityProfileName;
+
+	// Create the peer object and assign it's event handler(s)
 	var peerName = options.sessionName + "_" + options.username;
-	this.peer = new Peer(peerName, {host: '192.168.0.3', port:9000});
-	this.peer.on('connection', function(conn){
-		conn.on('data', function(data){
+	this.peer = new Peer(peerName, {
+		host: '192.168.0.3',
+		port: 9000
+	});
+	this.peer.on('connection', function(conn) {
+		conn.on('data', function(data) {
 			console.log(data);
 		});
 	})
-	this.connections = []; 
-	this.connectToPeer = function(peerID){
-		console.log(this);
+
+	this.connections = [];
+	/**
+	 * Function to connect to another peer
+	 *
+	 * @param  {String} peerID The id of the peer to connect to
+	 */
+	this.connectToPeer = function(peerID) {
 		var connection = this.peer.connect(peerID);
 		this.connections.push(connection);
 	}
-	this.disconnectPeer = function(peerID){
-		for (var i in this.connections){
+	/**
+	 * Function to disconnect from a peer
+	 * @param  {String} peerID The id of the peer to disconnect
+	 */
+	this.disconnectPeer = function(peerID) {
+		for (var i in this.connections) {
 			if (this.connections[i].peer = peerID) {
 				this.connections[i].close();
 				delete this.connections[i];
@@ -29,30 +50,52 @@ function User(options){
 var _CONTAINER;
 var user;
 
+/**
+ * Platform object
+ * The platform contains all functions related to the drawing platform including:
+ * - drawing
+ * - layers
+ * - history
+ * - session setup and teardown
+ *
+ * @type {Object}
+ */
 var platform = {
-	testing: false,
-	// Flag to check if the mouse is down
-	mouseDown: false,
+	activeLayer: {}, // Contains the layer currently selected for editing
+	stage: {}, // Contains the Kinetic.Stage object
 
-	// Brush object settings
+	testing: true, // Flag for whether unit tests should be run
+	mouseDown: false, // Flag to check if the mouse is down
+
+	/**
+	 * The brush object
+	 * Stores all parameters and functions associated with the brush tool
+	 *
+	 * @type {Object}
+	 */
 	brush: {
-		isErasing: false,
-		prevBrushColor: '000000',
-		brushColorHex: '000000',
-		brushSize: 3,
-		brushType: 'round',
-		changeBrushSize: function(brushSize){
+		isErasing: false, // Flag for being in 'eraser' mode
+		prevBrushColor: '000000', // The previous brush color, used when toggling between eraser and brush
+		brushColorHex: '000000', // The hex value of the brush
+		brushSize: 3, // The brush size in pixels
+		brushType: 'round', // Type of brush being used
+
+		/**
+		 * Function to change the brush size
+		 * @param  {int} brushSize Brush size in pixels
+		 */
+		changeBrushSize: function(brushSize) {
 			this.brushSize = brushSize;
 		},
+
 		/**
-		 * Function to change the color of the brush using a hex value
-		 *
-		 * @param String brushColorHex
-		 * @param boolean updateRGB
-		 * @param boolean updateHSV
-		 * @return boolean
+		 * Function that changes the hex color value of the brush
+		 * @param  {String}  brushColorHex The hex value to change to
+		 * @param  {boolean} updateRGB     Whether the RGB color fields should be updated
+		 * @param  {boolean} updateHSV     Whether the HSV color fields should be updated
+		 * @return {boolean}               Whether the change was successful
 		 */
-		changeBrushColorHex: function(brushColorHex, updateRGB, updateHSV){
+		changeBrushColorHex: function(brushColorHex, updateRGB, updateHSV) {
 			// If we are 'erasing' set the brush to white and don't update the color values
 			if (brushColorHex === 'eraser') {
 				platform.brush.brushColorHex = 'ffffff';
@@ -71,7 +114,7 @@ var platform = {
 			}
 
 			// Test if the hex is valid and change the brush color
-			if (/^([0-9a-f]{6})$/i.test(brushColorHex)){
+			if (/^([0-9a-f]{6})$/i.test(brushColorHex)) {
 				platform.brush.brushColorHex = brushColorHex;
 				if (updateRGB) platform.brush.hexToRGB(brushColorHex, updateHSV);
 				$('#brushColorLabel').css('color', '#' + brushColorHex);
@@ -81,16 +124,17 @@ var platform = {
 				return false;
 			}
 		},
-		/** 
+
+		/**
 		 * Converts a hex color value to RGB
-		 *
-		 * @param String hex
-		 * @param boolean updateHSV
+		 * @param  {String}  hex       The hex value to convert
+		 * @param  {boolean} updateHSV Whether the HSV values should be updated as well
 		 */
-		hexToRGB: function(hex, updateHSV){
-			var r = parseInt(hex.slice(0,2), 16);
-			var g = parseInt(hex.slice(2,4), 16);
-			var b = parseInt(hex.slice(4,6), 16);
+		hexToRGB: function(hex, updateHSV) {
+			// Separate the hex string and convert to integers
+			var r = parseInt(hex.slice(0, 2), 16);
+			var g = parseInt(hex.slice(2, 4), 16);
+			var b = parseInt(hex.slice(4, 6), 16);
 
 			$('#brushColorRed').val(r);
 			$('#brushColorGreen').val(g);
@@ -98,10 +142,13 @@ var platform = {
 
 			if (updateHSV) platform.brush.RGBToHSV(r, g, b);
 		},
+
 		/**
-		 * Converts RGB values to a hex color
+		 * Convert an RGB value to hex
+		 * @param {boolean} updateHSV Whether the HSV values should be updated as well
 		 */
-		RGBToHex: function(updateHSV){
+		RGBToHex: function(updateHSV) {
+			// Get the RGB values
 			var r = parseInt($('#brushColorRed').val(), 10);
 			var g = parseInt($('#brushColorGreen').val(), 10);
 			var b = parseInt($('#brushColorBlue').val(), 10);
@@ -153,19 +200,19 @@ var platform = {
 
 			if (platform.brush.changeBrushColorHex(hex)) $('#brushColorHex').val(hex);
 		},
-		/** 
-		 * Function to convert from RGB to HSV
-		 *
-		 * @param int r
-		 * @param int g
-		 * @param int b
-		 * @return boolean
+
+		/**
+		 * Convert from RGB to HSV
+		 * Conversion function ported from Python colorsys
+		 * @param {int} r The red value
+		 * @param {int} g The green value
+		 * @param {int} b The blue value
 		 */
-		RGBToHSV: function(r, g, b){
+		RGBToHSV: function(r, g, b) {
 			var hue, sat, val, max, min;
 
-			// Check that RGB are all numbers
-			if (isNaN(r) || isNaN(g) || isNaN(b)){
+			// Check that RGB values are all numbers
+			if (isNaN(r) || isNaN(g) || isNaN(b)) {
 				return false;
 			}
 
@@ -190,41 +237,54 @@ var platform = {
 			g = g / 255;
 			b = b / 255;
 
-			// Find the max and min rgb value
+			// Conversion from RGB to HSV ported from Python colorsys
+			// http://hg.python.org/cpython/file/2.7/Lib/colorsys.py
 			max = Math.max(r, g, b);
 			min = Math.min(r, g, b);
 
 			hue, sat, val = max;
 
-		    var d = max - min;
-		    sat = max == 0 ? 0 : d / max;
+			if (max == min) {
+				hue = 0;
+				sat = 0;
+				val = max;
+			} else {
+				sat = (max - min) / max;
+				var rc = (max - r) / (max - min);
+				var gc = (max - g) / (max - min);
+				var bc = (max - b) / (max - min);
+				if (r == max) {
+					hue = bc - gc;
+				} else if (g == max) {
+					hue = 2.0 + rc - bc
+				} else {
+					hue = 4.0 + gc - rc
+				}
+				hue = (hue / 6.0) % 1.0
+			}
+			hue = hue * 360;
+			if (hue < 0) {
+				hue += 360;
+			}
+			sat = sat * 100;
+			val = val * 100;
 
-		    if(max == min){
-		        hue = 0;
-		    }else{
-		        switch(max){
-		            case r: hue = (g - b) / d + (g < b ? 6 : 0); break;
-		            case g: hue = (b - r) / d + 2; break;
-		            case b: hue = (r - g) / d + 4; break;
-		        }
-		        hue /= 6;
-		    }
-
-			$('#brushColorHue').val(Math.round(hue * 360));
-			$('#brushColorSat').val(Math.round(sat * 100));
-			$('#brushColorVal').val(Math.round(val * 100));
+			$('#brushColorHue').val(Math.round(hue));
+			$('#brushColorSat').val(Math.round(sat));
+			$('#brushColorVal').val(Math.round(val));
 		},
 		/**
-		 * Function to convert HSV value to RGB
+		 * Convert from HSV to RGB values
+		 * Conversion function ported from Python colorsys
 		 */
-		HSVToRGB: function(){
+		HSVToRGB: function() {
 			var r, g, b;
 			var hue = $('#brushColorHue').val();
 			var sat = $('#brushColorSat').val();
 			var val = $('#brushColorVal').val();
 
 			// Check that HSV are all numbers
-			if (isNaN(hue) || isNaN(sat) || isNaN(val)){
+			if (isNaN(hue) || isNaN(sat) || isNaN(val)) {
 				return false;
 			}
 
@@ -244,28 +304,44 @@ var platform = {
 				$('#brushColorVal').val(val);
 			}
 
+			// Convert integers to a percentage
 			hue /= 360;
 			sat /= 100;
 			val /= 100;
+
+			// Conversion from RGB to HSV ported from Python colorsys
+			// http://hg.python.org/cpython/file/3.3/Lib/colorsys.py
 			var i = Math.floor(hue * 6);
-		    var f = hue * 6 - i;
-		    var p = val * (1 - sat);
-		    var q = val * (1 - f * sat);
-		    var t = val * (1 - (1 - f) * sat);
+			var f = (hue * 6) - i;
+			var p = val * (1 - sat);
+			var q = val * (1 - f * sat);
+			var t = val * (1 - sat * (1 - f));
 
-		    switch(i % 6){
-		        case 0: r = val, g = t, b = p; break;
-		        case 1: r = q, g = val, b = p; break;
-		        case 2: r = p, g = val, b = t; break;
-		        case 3: r = p, g = q, b = val; break;
-		        case 4: r = t, g = p, b = val; break;
-		        case 5: r = val, g = p, b = q; break;
-		    }
+			switch (i % 6) {
+				case 0:
+					r = val, g = t, b = p;
+					break;
+				case 1:
+					r = q, g = val, b = p;
+					break;
+				case 2:
+					r = p, g = val, b = t;
+					break;
+				case 3:
+					r = p, g = q, b = val;
+					break;
+				case 4:
+					r = t, g = p, b = val;
+					break;
+				case 5:
+					r = val, g = p, b = q;
+					break;
+			}
 
-			r = r*255;
-			g = g*255;
-			b = b*255;
-			
+			r = r * 255;
+			g = g * 255;
+			b = b * 255;
+
 			r = Math.round(r);
 			g = Math.round(g);
 			b = Math.round(b);
@@ -276,31 +352,176 @@ var platform = {
 			platform.brush.RGBToHex(false);
 
 		},
-		brush: function(){
+		/**
+		 * Function to enable the brush tool
+		 */
+		brush: function() {
 			$("#brushToolButton").addClass('btn-success').removeClass('btn-primary');
 			$("#eraserToolButton").addClass('btn-primary').removeClass('btn-success');
 			platform.brush.brushColorHex = platform.brush.prevBrushColor;
 			platform.brush.isErasing = false;
 		},
-		eraser: function(){
+		/**
+		 * Function to enable the eraser tool
+		 */
+		eraser: function() {
 			$("#eraserToolButton").addClass('btn-success').removeClass('btn-primary');
 			$("#brushToolButton").addClass('btn-primary').removeClass('btn-success');
 			if (!platform.brush.isErasing) {
 				platform.brush.prevBrushColor = platform.brush.brushColorHex;
 			}
 			platform.brush.isErasing = true;
-			platform.brush.changeBrushColorHex('eraser',false,false);
+			platform.brush.changeBrushColorHex('eraser', false, false);
 		}
 	},
 
-	// Collection of layers
+	/**
+	 * The draw line object
+	 * Stores all functionality used to draw lines on the stage
+	 * @type {Object}
+	 */
+	drawLine: {
+		newLine: {}, // Contains the Kinetic.Line that is being drawn
+		points: [], // Stores the points that will make up the line
+
+		/**
+		 * Mousedown event callback for line drawing
+		 * @param  {Event} event The mouse down event
+		 */
+		onMouseDown: function(event) {
+			// We have entered the stage but aren't flagged as having the mouse down
+			// so do nothing
+			if (event.type === "mouseenter" && platform.mouseDown === false) {
+				return false;
+			}
+
+			// Flag the mouse as being within the platform
+			if (event.type === "mouseenter") {
+				platform.outOfBounds = false;
+			}
+
+			try {
+				//Check if the layer is locked
+				platform.util.isLayerLocked(platform.activeLayer);
+
+				// Check the user can make changes to the canvas
+				platform.util.isContributor(user);
+
+				// If the layer is local check the user owns it
+				if (platform.activeLayer.getAttr('local')) {
+					platform.util.isLayerOwner(platform.activeLayer, user);
+				}
+
+				// Set the mouse position
+				var mousePosition = platform.stage.getPointerPosition();
+
+				// Mouseenter doesn't work with getPointerPosition so we have to work it out
+				if (mousePosition === undefined) {
+					mousePosition = platform.util.getPointerPosition(event);
+				}
+
+				// Flag the mouse as being down
+				platform.mouseDown = true;
+
+				// Reset the points array and add the start position
+				platform.drawLine.points = [];
+				platform.drawLine.points.push(mousePosition);
+
+				// Initialise the new line
+				platform.drawLine.newLine = new Kinetic.Line({
+					points: platform.drawLine.points,
+					stroke: platform.brush.brushColorHex,
+					strokeWidth: platform.brush.brushSize,
+					lineCap: platform.brush.brushType,
+					lineJoin: platform.brush.brushType
+				});
+
+				// Add the new line to the active layer
+				platform.activeLayer.add(platform.drawLine.newLine);
+			} catch (error) {
+				alert(error.message);
+			}
+		},
+		
+		/**
+		 * Mouseup event callback for line drawing
+		 * @param  {Event} event The mouseup event
+		 */
+		onMouseUp: function(event) {
+			// If the mouse leaves the stage and isn't currently doing anything
+			// ignore it
+			if (event.type === "mouseleave" && platform.mouseDown === false) {
+				return false;
+			}
+
+			// Make sure mouseleave events aren't added to the history
+			var addToHistory = false;
+
+			// Flag the mouse button as unpressed if a mouseup event
+			if (event.type === "mouseup") {
+				platform.mouseDown = false;
+				addToHistory = true;
+			} else {
+				platform.outOfBounds = true;
+			}
+
+			// If there is only one point the mouse did not move draw the correct shape 
+			// at the start position
+			if (platform.drawLine.points.length === 1) {
+				switch (platform.brush.brushType) {
+					case 'round':
+						var circle = new Kinetic.Circle({
+							x: platform.drawLine.points[0].x,
+							y: platform.drawLine.points[0].y,
+							fill: platform.brush.brushColorHex,
+							radius: platform.brush.brushSize / 2
+						});
+						platform.activeLayer.add(circle);
+						break;
+					default:
+						break;
+				}
+			} else {
+				// Add the points to the line being drawn
+				platform.drawLine.newLine.setPoints(platform.drawLine.points);
+			}
+
+			// Redraw the active layer
+			platform.activeLayer.drawScene();
+			platform.layers.updateLayerPreview(platform.activeLayer);
+			// add updated layer to history
+			if (addToHistory) {
+				platform.history.addToHistory(platform.activeLayer);
+			}
+		},
+
+		/**
+		 * Mousemove event callback for line drawing
+		 * @param  {Event} event The mousemove event
+		 */
+		onMouseMove: function(event) {
+			// If the mouse button is down add points to the points array
+			// and redraw the active layer
+			if (platform.mouseDown) {
+				platform.drawLine.points.push(platform.stage.getPointerPosition());
+				platform.activeLayer.drawScene();
+			}
+		}
+	},
+
+	/**
+	 * The layers object
+	 * Contains both the layers themselves and all functions associated with layers
+	 * @type {Object}
+	 */
 	layers: {
 		// Code snippet used for creating layer preview panels
 		layerPreviewSnippet: '<div class="layerPanel" id="[LAYER_NAME]"><div class="layerPreview" id="[LAYER_NAME]Preview"></div><label>[LAYER_NAME]</label><div class="layerButtons"><button type="button" class="btn btn-default btn-xs toggleVisible"><span class="glyphicon glyphicon-eye-open"></span></button><button type="button" class="btn btn-default btn-xs toggleGlobalLayer"><span class="glyphicon glyphicon-globe"></span></button><button type="button" class="btn btn-default btn-xs lockLayer"><span class="glyphicon glyphicon-lock"></span></button><button type="button" class="btn btn-default btn-xs deleteLayer"><span class="glyphicon glyphicon-trash"></span></button></div><div style="clear:both"></div></div>',
+		
 		/**
-		 * Function to create a white background layer the size of the canvas
+		 * Function that creates the global background layer
 		 */
-		createBackgroundLayer: function(){
+		createBackgroundLayer: function() {
 			var background = new Kinetic.Layer().setAttr('global', true);
 			var height = platform.stage.getHeight();
 			var width = platform.stage.getWidth();
@@ -312,13 +533,15 @@ var platform = {
 			background.add(rectangle);
 			this.globalLayers.globalLayer1 = background;
 		},
+
 		/**
-		 * Function to add a layer to the canvas
-		 *
-		 * @param Kinetic.Layer layer (optional)
-		 * @param bool global
+		 * Function that creates a new layer and adds it to the canvas
+		 * @param {Kinetic.Layer} layer            The layer being created or added
+		 * @param {boolean}       global           Whether the layer is global
+		 * @param {boolean} 	  securityOverride Whether security checks should be ignored
+		 * @param {boolean} 	  historyOverride  Whether the action should be added to the histories
 		 */
-		addLayer: function(layer, global, securityOverride, historyOverride){
+		addLayer: function(layer, global, securityOverride, historyOverride) {
 			try {
 				// Check if user can add layeres
 				if (!securityOverride) {
@@ -327,12 +550,12 @@ var platform = {
 
 				// Work out the layer's key
 				var key = Object.keys(platform.layers.globalLayers).length + Object.keys(platform.layers.localLayers).length;
-				
+
 				var layerName = '';
 				// Check if the passed layer variable is a Kinetic.Layer
-				if (layer.nodeType !== 'Layer'){
+				if (layer.nodeType !== 'Layer') {
 					layer = new Kinetic.Layer();
-					
+
 					// Work out layer name is and add to the correct layers object
 					if (global === true) {
 						layerName = 'globalLayer';
@@ -341,7 +564,7 @@ var platform = {
 						}
 						layer.setAttr('global', true);
 
-						while (typeof platform.layers.globalLayers["globalLayer" + key] === "object"){
+						while (typeof platform.layers.globalLayers["globalLayer" + key] === "object") {
 							key++;
 						}
 						layerName += key;
@@ -351,7 +574,7 @@ var platform = {
 						layer.setAttr('local', true);
 						layer.setAttr('owner', user.username);
 
-						while (typeof platform.layers.localLayers["localLayer" + key] === "object"){
+						while (typeof platform.layers.localLayers["localLayer" + key] === "object") {
 							key++;
 						}
 						layerName += key;
@@ -383,19 +606,20 @@ var platform = {
 
 				// Add to history
 				if (!historyOverride) platform.history.addToHistory();
-			} catch(error) {
+			} catch (error) {
 				alert(error.message);
 			}
-			
+
 		},
+
 		/**
-		 * Function to lock or unlock a given layer
-		 *
-		 * @param Kinetic.Layer layer
-		 * @return boolean
+		 * Function to toggle whether a layer is locked.
+		 * Locked layers cannot be altered.
+		 * @param  {Kinetic.Layer} layer The layer to be toggled
+		 * @return {boolean}       Was the toggle successful?
 		 */
-		lockLayer: function(layer){
-			try{
+		lockLayer: function(layer) {
+			try {
 				if (layer.getAttr('global')) {
 					// Check user can lock global layers
 					platform.util.isSessionOwner(user);
@@ -413,43 +637,44 @@ var platform = {
 					layer.setAttr('locked', true);
 				}
 				return true;
-				
-			} catch(error){
+
+			} catch (error) {
 				alert(error.message);
 				return false;
 			}
 		},
+
 		/**
-		 * Function to toggle a layer as being global
-		 *
-		 * @param Kinetic.Layer layer
-		 * @return boolean
+		 * Function to toggle whether a layer is global.
+		 * Global layers can be edited by any user.
+		 * @param  {Kinetic.Layer} layer The layer to be toggled
+		 * @return {boolean}       Was the toggle successful?
 		 */
-		toggleGlobalLayer: function(layer){
-			try{
+		toggleGlobalLayer: function(layer) {
+			try {
 				// Check user can modify global layers
 				platform.util.isSessionOwner(user);
-				
+
 				if (layer.getAttr('global')) {
 					layer.setAttr('global', false);
 				} else {
 					layer.setAttr('global', true);
 				}
 				return true;
-				
-			} catch(error){
+
+			} catch (error) {
 				alert(error.message);
 				return false;
 			}
 		},
+
 		/**
-		 * Function to delete a given layer
-		 *
-		 * @param Kinetic.Layer layer
-		 * @return boolean
+		 * Function to delete a given layer.
+		 * @param  {Kinetic.Layer} layer The layer to be delete
+		 * @return {boolean}       Was the delete successful?
 		 */
-		deleteLayer: function(layer){
-			try{
+		deleteLayer: function(layer) {
+			try {
 				platform.util.isLayerLocked(layer);
 
 				// Make sure we always have a layer on the stage
@@ -488,25 +713,27 @@ var platform = {
 						}
 					}
 				}
-				
-			} catch(error){
+
+			} catch (error) {
 				alert(error.message);
 				return false;
 			}
 		},
+
 		/**
-		 * Function to rebuild the layer model for referencing purposes after an undo or redo
+		 * Function to rebuild the layer model
+		 * This is used after an undo or redo action and is mainly used to restore correct references
 		 */
-		rebuildLayerModel: function(){
+		rebuildLayerModel: function() {
 			// Empty the layer model
 			this.globalLayers = {};
-			this.localLayers  = {};
+			this.localLayers = {};
 
 			// Get the current layers
 			var currentLayers = platform.stage.getChildren();
-			
+
 			// Restore the layers to their correct positions in the layer model
-			for (var i in currentLayers){
+			for (var i in currentLayers) {
 				// Ignore anything that is not an object
 				if (typeof currentLayers[i] !== 'object') continue;
 
@@ -522,17 +749,17 @@ var platform = {
 
 			platform.activeLayer.getAttr('preview').getContainer().click();
 		},
+
 		/**
-		 * Function to add a new layer preview panel to the right hand nav
-		 *
-		 * @param Kinetic.Layer layer
-		 * @param String layerName
+		 * Function that adds a new layer preview panel to the right hand nav
+		 * @param {Kinetic.Layer} layer     The layer being previewed
+		 * @param {String}        layerName The name of the layer
 		 */
-		addLayerPreview: function(layer, layerName){
+		addLayerPreview: function(layer, layerName) {
 			// Update the preview panel snippet and add it to the DOM
 			var layerPreview = platform.layers.layerPreviewSnippet.replace(/\[LAYER_NAME\]/g, layerName);
 			$('.layerSection').prepend(layerPreview);
-			
+
 			if (layerName === 'globalLayer1') {
 				$('#globalLayer1 label').text('background');
 			}
@@ -541,15 +768,18 @@ var platform = {
 			platform.layers.createLayerPreviewStage(layer, layerName);
 			platform.util.addLayerButtonEvents(layerName);
 		},
+
 		/**
-		 * Updates the preview panel of a given layer
-		 *
-		 * @param Kinetic.Layer layer
+		 * Function to update the preview of a given layer.
+		 * Called after any edit to a layer e.g. drawing / erasing
+		 * @param  {Kinetic.Layer} layer The layer being previewed
 		 */
-		updateLayerPreview: function(layer){
+		updateLayerPreview: function(layer) {
 			// Get the preview stage and clone the layer
 			var layerPreviewStage = layer.getAttr('preview');
-			var clone = layer.clone({preview: null});
+			var clone = layer.clone({
+				preview: null
+			});
 
 			// Shrink the preview layer to fit in the provided space
 			clone.setScale(0.09);
@@ -559,13 +789,13 @@ var platform = {
 			layerPreviewStage.add(clone);
 			clone.drawScene();
 		},
+
 		/**
-		 * Function to create the stage used by a given preview panel
-		 *
-		 * @param Kinetic.Layer layer
-		 * @param String layerName
+		 * Function to create the stage needed to display a layer preview
+		 * @param  {Kinetic.Layer} layer     The layer being previewed
+		 * @param  {String}        layerName The name of the layer
 		 */
-		createLayerPreviewStage: function(layer, layerName){
+		createLayerPreviewStage: function(layer, layerName) {
 			// Create the stage
 			var layerPreviewStage = new Kinetic.Stage({
 				container: layerName + 'Preview',
@@ -574,7 +804,9 @@ var platform = {
 			});
 
 			// Clone the layer
-			var clone = layer.clone({preview: null});
+			var clone = layer.clone({
+				preview: null
+			});
 
 			// Shrink the clone to fit in the space provided and add to preview stage
 			clone.setScale(0.09);
@@ -589,29 +821,34 @@ var platform = {
 				$('#' + layerName + ' .toggleGlobalLayer').addClass('active');
 			}
 		},
+
 		/**
-		 * Rebuilds the layer previews
-		 *
-		 * @param Array[Kinetic.Layer] layers
+		 * Function to rebuild the layer preview panels after an undo / redo action
+		 * @param  {[Kinetic.Layer]} layers Array of layers to preview
 		 */
-		rebuildLayerPreviews: function(layers){
-			var panelNames = [], layerNames = [];
-			$('.layerPanel').each(function(){
+		rebuildLayerPreviews: function(layers) {
+			// Initialise arrays of panel and layer names
+			var panelNames = [],
+				layerNames = [];
+
+			// Get all the panel names
+			$('.layerPanel').each(function() {
 				panelNames.push(this.id);
 			});
 
-			for (var i in layers){
+			for (var i in layers) {
 				// Ignore anything that isn't a layer
 				if (typeof layers[i] !== 'object') continue;
 
 				// Work out the layer name
 				var layerName = '';
-				if (layers[i].getAttr('global')){
+				if (layers[i].getAttr('global')) {
 					layerName += 'globalLayer' + layers[i].getAttr('layerObjectKey');
 				} else {
 					layerName += 'localLayer' + layers[i].getAttr('layerObjectKey');
 				}
 
+				// Store the layer name
 				layerNames.push(layerName);
 
 				// Remove the existing preview stage
@@ -626,19 +863,21 @@ var platform = {
 				}
 			}
 
+			// Remove any panels that are no longer required
 			for (var j in panelNames) {
 				if (layerNames.indexOf(panelNames[j]) === -1) {
 					$('#' + panelNames[j]).remove();
 				}
 			}
 		},
+
 		/**
-		 * Function to get a layer from the platforms layers objects
-		 *
-		 * @param String layerName
-		 * @param boolean global
+		 * Function to get a later
+		 * @param  {String}  layerName The name of the layer being retrieved
+		 * @param  {boolean} global    Is the layer global?
+		 * @return {Kinetic.Layer}
 		 */
-		getLayer: function(layerName, global){
+		getLayer: function(layerName, global) {
 			if (global) {
 				return platform.layers.globalLayers[layerName];
 			} else {
@@ -648,374 +887,39 @@ var platform = {
 		globalLayers: {},
 		localLayers: {}
 	},
-	activeLayer: {},
-	stage: {},
 
-	// Draw line object
-	drawLine: {
-		newLine: {},
-		points: [],
-		/**
-		 * Mouse down event callback
-		 *
-		 * @param Event event
-		 */
-		onMouseDown: function(event){
-			// We have entered the stage but aren't flagged as having the mouse down
-			// so do nothing
-			if (event.type === "mouseenter" && platform.mouseDown === false) {
-				return false;
-			}
-
-			// Flag the mouse as being within the platform
-			if (event.type === "mouseenter") {
-				platform.outOfBounds = false;
-			}
-
-			try{
-				//Check if the layer is locked
-				platform.util.isLayerLocked(platform.activeLayer);
-
-				// Check the user can make changes to the canvas
-				platform.util.isContributor(user);
-
-				// If the layer is local check the user owns it
-				if (platform.activeLayer.getAttr('local')) {
-					platform.util.isLayerOwner(platform.activeLayer, user);
-				}
-
-				// Set the mouse position
-				var mousePosition = platform.stage.getPointerPosition();
-
-				// Mouseenter doesn't work with getPointerPosition so we have to work it out
-				if (mousePosition === undefined) {
-					mousePosition = platform.util.getPointerPosition(event);
-				}
-
-				// Flag the mouse as being down
-				platform.mouseDown = true;
-
-				// Reset the points array and add the start position
-				platform.drawLine.points = [];
-				platform.drawLine.points.push(mousePosition);
-
-				// Initialise the new line
-				platform.drawLine.newLine = new Kinetic.Line({
-					points: platform.drawLine.points,
-					stroke: platform.brush.brushColorHex,
-					strokeWidth: platform.brush.brushSize,
-					lineCap: platform.brush.brushType,
-					lineJoin: platform.brush.brushType
-				});
-
-				// Add the new line to the active layer
-				platform.activeLayer.add(platform.drawLine.newLine);
-			} catch(error){
-				alert(error.message);
-			}
-		},
-		/**
-		 * Mouse up event callback
-		 *
-		 * @param Event event
-		 */
-		onMouseUp: function(event){
-			// If the mouse leaves the stage and isn't currently doing anything
-			// ignore it
-			if (event.type === "mouseleave" && platform.mouseDown === false){
-				return false;
-			}
-
-			var addToHistory = false;
-
-			// Flag the mouse button as unpressed if a mouseup event
-			if (event.type === "mouseup") {
-				platform.mouseDown = false;
-				addToHistory = true;
-			} else {
-				platform.outOfBounds = true;
-			}
-
-			// If there is only one point the mouse did not move draw the correct shape 
-			// at the start position
-			if (platform.drawLine.points.length === 1){
-				switch (platform.brush.brushType) {
-					case 'round':
-						var circle = new Kinetic.Circle({
-							x: platform.drawLine.points[0].x,
-							y: platform.drawLine.points[0].y,
-							fill: platform.brush.brushColorHex,
-							radius: platform.brush.brushSize / 2
-						});
-						platform.activeLayer.add(circle);
-					break;
-					default:
-					break;
-				}
-			} else {
-				// Add the points to the line being drawn
-				platform.drawLine.newLine.setPoints(platform.drawLine.points);
-			}
-
-			// Redraw the active layer
-			platform.activeLayer.drawScene();
-			platform.layers.updateLayerPreview(platform.activeLayer);
-			// add updated layer to history
-			if (addToHistory) {
-				platform.history.addToHistory(platform.activeLayer);
-			}
-		},
-		/**
-		 * Mouse move event callback
-		 *
-		 * @param Event event
-		 */
-		onMouseMove: function(event){
-			// If the mouse button is down add points to the points array
-			// and redraw the active layer
-			if (platform.mouseDown) {
-				platform.drawLine.points.push(platform.stage.getPointerPosition());
-				platform.activeLayer.drawScene();
-			}
-		}
-	},
-
-	util: {
-		/**
-		 * Function to get the mouse position when entering the stage as KineticJS doesn't
-		 * detect the position onmouseenter
-		 *
-		 * @param jQueryEvent event
-		 * @return Object position
-		 */
-		getPointerPosition: function(event){
-			var position = {
-				x: event.pageX - $(platform.stage.getContent()).offset().left,
-				y: event.pageY - $(platform.stage.getContent()).offset().top
-			};
-			return position;
-		},
-		/**
-		 * Function to check that the current user is a session owner
-		 *
-		 * @param Object user
-		 * @param Object callback //optional callback function
-		 * @throws Error
-		 */
-		isSessionOwner: function(user, callback){
-			if (user.securityProfile > 1) {
-				throw new Error('Must be session owner');
-			}
-
-			if (callback) callback();
-		},
-		/**
-		 * Function to check that the current user is a contributor or higher
-		 *
-		 * @param Object user
-		 * @param Object callback //optional callback function
-		 * @throws Error
-		 */
-		isContributor: function(user, callback){
-			if (user.securityProfile > 2) {
-				throw new Error('Must be contributor or higher');
-			}
-			if (callback) callback();
-		},
-		/**
-		 * Function to check that the layer is owned by the given user
-		 *
-		 * @param Kinetic.Layer layer
-		 * @param Object user
-		 * @param Object callback //optional callback function
-		 * @throws Error
-		 */
-		isLayerOwner: function(layer, user, callback){
-			if (layer.getAttr('owner') !== user.username && user.securityProfile > 1) {
-				throw new Error('Must own layer to make changes');
-			}
-			if (callback) callback();
-		},
-		/**
-		 * Function to check if a layer is locked
-		 *
-		 * @param Kinetic.Layer layer
-		 * @throws Error
-		 */
-		isLayerLocked: function(layer){
-			if(layer.getAttr('locked')) {
-				throw new Error('Layer is locked');
-			}
-		},
-		// Adds event listeners to the the stage and UI elements
-		addEventListeners: function(){
-			$(window).on('beforeunload', function(){
-				return "Leave session";
-			});
-			$(window).on('unload', platform.leaveSession);
-
-			var stageContent  = $(platform.stage.getContent());
-
-			// Add event listeners
-			stageContent.on("mousedown mouseenter", platform.drawLine.onMouseDown);
-			stageContent.on("mouseup mouseleave", platform.drawLine.onMouseUp);
-			stageContent.on("mousemove", platform.drawLine.onMouseMove);
-
-			$('#userUndoButton').on('click', platform.history.undoLastAction);
-			$('#userRedoButton').on('click', platform.history.redoLastAction);
-			$('#globalUndoButton').on('click', function(){platform.history.undoLastAction(true);});
-			$('#globalRedoButton').on('click', function(){platform.history.redoLastAction(true);});
-
-			$('form').on('submit', function(event){event.preventDefault();});
-
-			$('#brushSizeInput').val(platform.brush.brushSize);
-			$('#brushSizeInput').on('change keyup', function(){platform.brush.changeBrushSize($(this).val());});
-
-			$('#brushColorHex').on('change keyup', platform.brush.changeBrushColorHex);
-			$('#brushColorHex').val(platform.brush.brushColorHex).change();
-
-			$('#brushColorRed, #brushColorGreen, #brushColorBlue').on('change keyup', platform.brush.RGBToHex);
-
-			$('#brushColorHue, #brushColorSat, #brushColorVal').on('change keyup', platform.brush.HSVToRGB);
-
-			$('#saveToPNG').on('click', platform.util.saveToPNG);
-
-			$('#newLayerButton').on('click', platform.layers.addLayer);
-
-			$('#brushToolButton').on('click', platform.brush.brush);
-			$('#brushToolButton').click();
-
-			$('#eraserToolButton').on('click', platform.brush.eraser);
-
-			$('#workspaceContainer form').on('submit', function(event){
-				alert();
-			});
-
-		},
-		/**
-		 * Function to add event listeners to the buttons on a layer preview panel
-		 * 
-		 * @param string layerName
-		 */
-		addLayerButtonEvents: function(layerName){
-			if (!layerName) return false;
-			
-			var global = false;
-			if (layerName.indexOf('global') !== -1) {
-				global = true;
-			}
-
-			var previewDiv = $('#' + layerName);
-			var toggleVisibleButton = previewDiv.find('.toggleVisible');
-			var toggleGlobalLayerButton = previewDiv.find('.toggleGlobalLayer');
-			var lockLayerButton = previewDiv.find('.lockLayer');
-			var deleteLayerButton = previewDiv.find('.deleteLayer');
-
-			previewDiv.on('click', function(){
-				var layer = platform.layers.getLayer(layerName, global);
-				$('.layerSection .layerPanel label.active').removeClass('active');
-				previewDiv.find('label').addClass('active');
-				platform.activeLayer = layer;
-			});
-			previewDiv.click();
-			
-			toggleVisibleButton.on('click', function(){
-				var layer = platform.layers.getLayer(layerName, global);
-				if (layer.isVisible()){
-					layer.hide();
-				} else {
-					layer.show();
-				}
-				$(this).toggleClass('active');
-
-			});
-
-			toggleGlobalLayerButton.on('click', function(){
-				var layer = platform.layers.getLayer(layerName, global);
-				if (platform.layers.toggleGlobalLayer(layer)){
-					$(this).toggleClass('active');
-				}
-			});
-
-			lockLayerButton.on('click', function(){
-				var layer = platform.layers.getLayer(layerName, global);
-				if (platform.layers.lockLayer(layer)){
-					$(this).toggleClass('active');
-				}
-			});
-
-			deleteLayerButton.on('click', function(){
-				if (layerName === 'globalLayer1') {
-					alert('This layer cannot be deleted');
-					return false;
-				}
-				if (confirm('Are you sure you want to delete this layer?')){
-					var layer = platform.layers.getLayer(layerName, global);
-					if (platform.layers.deleteLayer(layer)) {
-						previewDiv.remove();
-					}
-				}
-			});
-		},
-		restrictToNumericInput: function(){
-			// Only allow numeric key entry for fields with .numericOnly class
-			$('input[type="number"]').keydown(function(e) {
-				
-				if ((e.keyCode >= 48 && e.keyCode <= 57) //numbers
-						|| (e.keyCode >= 96 && e.keyCode <= 105)  //numpad number              
-						|| e.keyCode == 8 //backspace
-						|| e.keyCode == 9 //tab
-						|| e.keyCode == 13 //enter
-						|| e.keyCode == 16 //shift
-						|| e.keyCode == 37 //arrow left
-						|| e.keyCode == 39 //arrow right
-						|| e.keyCode == 46 //delete
-						|| e.keyCode == 110 //decimal point
-						|| e.keyCode == 190 //full stop
-					) {
-					
-				} else {
-					return false;
-				}
-			});
-		},
-		saveToPNG: function(){
-			platform.stage.toDataURL({
-				mimeType: 'image/png',
-				callback: function(dataUrl){
-					window.open(dataUrl);
-				}
-			});
-		}
-	},
-
-	// Undo / redo functionality for user actions and all actions on session
+	/**
+	 * The history object
+	 * Contains all functionality associated with undo / redo
+	 * @type {Object}
+	 */
 	history: {
-		userHistory: [],
-		globalHistory: [],
-		userRedo: [],
-		globalRedo: [],
+		userHistory: [], // Actions the user has performed
+		globalHistory: [], // Actions that all users have performed
+		userRedo: [], // Actions the user can redo
+		globalRedo: [], // Global actions that can be re-done
+
 		/**
 		 * Function to add an action to the histories.
 		 * Should be called whenever the canvas is modified
 		 */
-		addToHistory: function(){
-			var localLayers   = {},
-				globalLayers  = {},
-				userHistory   = platform.history.userHistory,
-				userRedo      = platform.history.userRedo,
+		addToHistory: function() {
+			var localLayers = {},
+				globalLayers = {},
+				userHistory = platform.history.userHistory,
+				userRedo = platform.history.userRedo,
 				globalHistory = platform.history.globalHistory,
-				globalRedo    = platform.history.globalRedo;
+				globalRedo = platform.history.globalRedo;
 
 			// JSONify the local layers
-			for (var i in platform.layers.localLayers){
+			for (var i in platform.layers.localLayers) {
 				if (typeof platform.layers.localLayers[i] === 'object') {
 					localLayers[i] = platform.layers.localLayers[i].toJSON();
 				}
 			}
 
 			// JSONify the global layers
-			for (var j in platform.layers.globalLayers){
+			for (var j in platform.layers.globalLayers) {
 				if (typeof platform.layers.globalLayers[j] === 'object') {
 					globalLayers[j] = platform.layers.globalLayers[j].toJSON();
 				}
@@ -1040,31 +944,31 @@ var platform = {
 			userRedo.splice(0);
 			globalRedo.splice(0);
 		},
+
 		/**
 		 * Function to undo the last action. By default undoes the user's last
 		 * action. If undoing a global action, the last change made to the canvas
 		 * will be undone.
 		 *
-		 * @param boolean global -- Global undo?
-		 * @return boolean
-		 * @TODO - add support for global undo
+		 * @param {boolean} global Undo a global action?
+		 * @return {boolean}
 		 */
-		undoLastAction: function(global){
-			var history      = platform.history.userHistory,
-				redo         = platform.history.userRedo,
+		undoLastAction: function(global) {
+			var history = platform.history.userHistory,
+				redo = platform.history.userRedo,
 				otherHistory = platform.history.globalHistory,
-				otherRedo    = platform.history.globalRedo,
-				stage        = platform.stage;
+				otherRedo = platform.history.globalRedo,
+				stage = platform.stage;
 
-			try{
+			try {
 				platform.util.isContributor(user);
 
 				if (global === true) {
 					platform.util.isSessionOwner(user);
-					history      = platform.history.globalHistory;
-					redo         = platform.history.globalRedo;
+					history = platform.history.globalHistory;
+					redo = platform.history.globalRedo;
 					otherHistory = platform.history.userHistory;
-					otherRedo    = platform.history.userRedo;
+					otherRedo = platform.history.userRedo;
 				} else {
 					global = false;
 				}
@@ -1080,33 +984,33 @@ var platform = {
 				redo.push(action);
 
 				// If the action exists in the other history get rid of it
-				otherHistory = otherHistory.filter(function(element){
+				otherHistory = otherHistory.filter(function(element) {
 					return element !== action;
 				});
 
 				// Update the action to reference the previous canvas state
-				action = history[history.length-1];
+				action = history[history.length - 1];
 
 				// Remove the existing layers from the canvas
 				stage.destroyChildren();
 
 				// Restore the local layers from the JSON
-				for (var i in action.localLayers){
+				for (var i in action.localLayers) {
 					stage.add(Kinetic.Node.create(action.localLayers[i]));
 					stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('Z-Index'));
 				}
 
 				// Restore the global layers from the JSON
-				for (var j in action.globalLayers){
+				for (var j in action.globalLayers) {
 					stage.add(Kinetic.Node.create(action.globalLayers[j]));
 					stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('Z-Index'));
 				}
 
 				// Restore the active layer
 				var madeActive = false;
-				for (var k in stage.children){
+				for (var k in stage.children) {
 					if (typeof stage.children[k] === 'object' &&
-						stage.children[k].getAttr('Z-Index') === platform.activeLayer.getAttr('Z-Index')){
+						stage.children[k].getAttr('Z-Index') === platform.activeLayer.getAttr('Z-Index')) {
 						platform.activeLayer = stage.children[k];
 						madeActive = true;
 					}
@@ -1121,33 +1025,33 @@ var platform = {
 
 				// Redraw the canvas
 				stage.drawScene();
-			}catch(e){
+			} catch (e) {
 				alert(e.message);
 			}
 		},
+
 		/**
 		 * Function to redo the last action. By default redoes the user's last
 		 * action. If redoing a global action, the last change made to the canvas
 		 * will be redone.
 		 *
-		 * @param boolean global -- Global redo?
-		 * @return boolean
-		 * @TODO - add support for global redo
+		 * @param {boolean} global Redo a global action?
+		 * @return {boolean}
 		 */
-		redoLastAction: function(global){
-			var history      = platform.history.userHistory,
-				redo         = platform.history.userRedo,
+		redoLastAction: function(global) {
+			var history = platform.history.userHistory,
+				redo = platform.history.userRedo,
 				otherHistory = platform.history.globalHistory,
-				otherRedo    = platform.history.globalRedo,
-				stage        = platform.stage;
-			try{
+				otherRedo = platform.history.globalRedo,
+				stage = platform.stage;
+			try {
 				platform.util.isContributor(user);
 				if (global === true) {
 					platform.util.isSessionOwner(user);
-					history      = platform.history.globalHistory;
-					redo         = platform.history.globalRedo;
+					history = platform.history.globalHistory;
+					redo = platform.history.globalRedo;
 					otherHistory = platform.history.userHistory;
-					otherRedo    = platform.history.userRedo;
+					otherRedo = platform.history.userRedo;
 				} else {
 					global = false;
 				}
@@ -1163,7 +1067,7 @@ var platform = {
 				history.push(action);
 
 				// If the action exists in the other redo get rid of it
-				otherRedo = otherRedo.filter(function(element){
+				otherRedo = otherRedo.filter(function(element) {
 					return element !== otherRedo[i];
 				});
 
@@ -1175,23 +1079,23 @@ var platform = {
 				stage.destroyChildren();
 
 				// Restore the local layers
-				for (var i in action.localLayers){
+				for (var i in action.localLayers) {
 					stage.add(Kinetic.Node.create(action.localLayers[i]));
 					stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('Z-Index'));
 				}
 
 				// Restore the global layers
-				for (var j in action.globalLayers){
+				for (var j in action.globalLayers) {
 					stage.add(Kinetic.Node.create(action.globalLayers[j]));
 					stage.children[stage.children.length - 1].setZIndex(stage.children[stage.children.length - 1].getAttr('Z-Index'));
 				}
 
 				// Restore the active layer
 				var madeActive = false;
-				for (var k in stage.children){
+				for (var k in stage.children) {
 					if (typeof stage.children[k] === 'object' &&
-						stage.children[k].getAttr('Z-Index') === platform.activeLayer.getAttr('Z-Index')){
-						
+						stage.children[k].getAttr('Z-Index') === platform.activeLayer.getAttr('Z-Index')) {
+
 						platform.activeLayer = stage.children[k];
 						madeActive = true;
 					}
@@ -1207,16 +1111,348 @@ var platform = {
 				// Redraw the scene
 				stage.drawScene();
 
-			}catch(exception){
+			} catch (exception) {
 				alert(exception.message);
 			}
 		}
 	},
 
 	/**
-	 * Function to initialise the drawing platform
+	 * The session object
+	 * Handles client side functionality to initialise, join or leave a session
+	 * @type {Object}
 	 */
-	init: function(){
+	session: {
+		/**
+		 * Client side session initialisation
+		 */
+		initSession: function() {
+			var username = $('#username').val();
+			var sessionName = $('#sessionName').val();
+
+			$.ajax({
+				url: '/initSession',
+				dataType: 'json',
+				data: {
+					username: username,
+					sessionName: sessionName
+				},
+				method: "POST",
+				success: function(data) {
+					// Replace the body with the drawing platform
+					$('body').html(data.body);
+
+					// Create the use object
+					user = new User(data.options);
+
+					// Initialise the drawing platform
+					platform.init();
+				}
+			});
+		},
+
+		/**
+		 * Client side setup when joining an exisiting session
+		 * @return {[type]} [description]
+		 */
+		joinSession: function() {
+			var username = $('#username').val();
+			var sessionName = $('#sessionName').val();
+			$.ajax({
+				url: '/joinSession',
+				dataType: 'json',
+				data: {
+					username: username,
+					sessionName: sessionName
+				},
+				method: "POST",
+				success: function(data) {
+					// Replace the body with the drawing platform
+					$('body').html(data.body);
+
+					// Create the use object
+					user = new User(data.options);
+
+					// Initialise the drawing platform
+					platform.init();
+
+					// Connect to the other users in the session
+					for (var i in data.users) {
+						if (data.users[i] !== user.username) {
+							user.connectToPeer(data.options.sessionName + '_' + data.users[i]);
+						}
+					}
+				}
+			});
+		},
+
+		/**
+		 * Client side tear down of a session
+		 */
+		leaveSession: function() {
+			$.ajax({
+				url: '/leaveSession',
+				data: {
+					user: user.options
+				},
+				method: 'POST',
+				async: false
+			});
+		},
+	},
+
+	/**
+	 * Utility functions
+	 * @type {Object}
+	 */
+	util: {
+
+		/**
+		 * Function to get the mouse position when entering the stage as KineticJS doesn't
+		 * detect the position onmouseenter
+		 *
+		 * @param  {jQueryEvent} event
+		 * @return {Object} position
+		 */
+		getPointerPosition: function(event) {
+			var position = {
+				x: event.pageX - $(platform.stage.getContent()).offset().left,
+				y: event.pageY - $(platform.stage.getContent()).offset().top
+			};
+			return position;
+		},
+
+		/**
+		 * Function to check that the current user is a session owner
+		 *
+		 * @param {Object} user     The user being checked
+		 * @param {function} callback Optional callback function
+		 * @throws Error
+		 */
+		isSessionOwner: function(user, callback) {
+			if (user.securityProfile > 1) {
+				throw new Error('Must be session owner');
+			}
+
+			if (callback) callback();
+		},
+
+		/**
+		 * Function to check that the current user is a contributor or higher
+		 *
+		 * @param {Object} user     The user being checked
+		 * @param {function} callback Optional callback function
+		 * @throws Error
+		 */
+		isContributor: function(user, callback) {
+			if (user.securityProfile > 2) {
+				throw new Error('Must be contributor or higher');
+			}
+			if (callback) callback();
+		},
+
+		/**
+		 * Function to check that the layer is owned by the given user
+		 *
+		 * @param {Kinetic.Layer} layer    The layer being checked
+		 * @param {User}        user     The user being checked
+		 * @param {function}        callback Optional callback function
+		 * @throws Error
+		 */
+		isLayerOwner: function(layer, user, callback) {
+			if (layer.getAttr('owner') !== user.username && user.securityProfile > 1) {
+				throw new Error('Must own layer to make changes');
+			}
+			if (callback) callback();
+		},
+
+		/**
+		 * Function to check if a layer is locked
+		 *
+		 * @param {Kinetic.Layer} layer The layer being checked
+		 * @throws Error
+		 */
+		isLayerLocked: function(layer) {
+			if (layer.getAttr('locked')) {
+				throw new Error('Layer is locked');
+			}
+		},
+
+		/**
+		 * Adds event listeners to the stage and UI elements
+		 */
+		addEventListeners: function() {
+			// Event listeners for leaving a session
+			$(window).on('beforeunload', function() {
+				return "Leave session";
+			});
+			$(window).on('unload', platform.session.leaveSession);
+
+			var stageContent = $(platform.stage.getContent());
+
+			// Drawing events
+			stageContent.on("mousedown mouseenter", platform.drawLine.onMouseDown);
+			stageContent.on("mouseup mouseleave", platform.drawLine.onMouseUp);
+			stageContent.on("mousemove", platform.drawLine.onMouseMove);
+
+			// Undo / redo buttons
+			$('#userUndoButton').on('click', platform.history.undoLastAction);
+			$('#userRedoButton').on('click', platform.history.redoLastAction);
+			$('#globalUndoButton').on('click', function() {
+				platform.history.undoLastAction(true);
+			});
+			$('#globalRedoButton').on('click', function() {
+				platform.history.redoLastAction(true);
+			});
+
+			// Prevent form submits
+			$('form').on('submit', function(event) {
+				event.preventDefault();
+			});
+
+			// Brush size events
+			$('#brushSizeInput').val(platform.brush.brushSize);
+			$('#brushSizeInput').on('change keyup', function() {
+				platform.brush.changeBrushSize($(this).val());
+			});
+
+			// Brush color events
+			$('#brushColorHex').on('change keyup', platform.brush.changeBrushColorHex);
+			$('#brushColorHex').val(platform.brush.brushColorHex).change();
+
+			$('#brushColorRed, #brushColorGreen, #brushColorBlue').on('change keyup', platform.brush.RGBToHex);
+
+			$('#brushColorHue, #brushColorSat, #brushColorVal').on('change keyup', platform.brush.HSVToRGB);
+
+			// Save to PNG button
+			$('#saveToPNG').on('click', platform.util.saveToPNG);
+
+			// New layer button
+			$('#newLayerButton').on('click', platform.layers.addLayer);
+
+			// Drawing tool buttons
+			$('#brushToolButton').on('click', platform.brush.brush);
+			$('#brushToolButton').click();
+
+			$('#eraserToolButton').on('click', platform.brush.eraser);
+		},
+
+		/**
+		 * Function to add event listeners to the buttons on a layer preview panel
+		 *
+		 * @param {string} layerName
+		 */
+		addLayerButtonEvents: function(layerName) {
+			if (!layerName) return false;
+
+			// Check if layer is global
+			var global = false;
+			if (layerName.indexOf('global') !== -1) {
+				global = true;
+			}
+
+			// Get the preview panel's UI elements
+			var previewDiv = $('#' + layerName);
+			var toggleVisibleButton = previewDiv.find('.toggleVisible');
+			var toggleGlobalLayerButton = previewDiv.find('.toggleGlobalLayer');
+			var lockLayerButton = previewDiv.find('.lockLayer');
+			var deleteLayerButton = previewDiv.find('.deleteLayer');
+
+			// Event to select the active layer
+			previewDiv.on('click', function() {
+				var layer = platform.layers.getLayer(layerName, global);
+				$('.layerSection .layerPanel label.active').removeClass('active');
+				previewDiv.find('label').addClass('active');
+				platform.activeLayer = layer;
+			});
+			previewDiv.click();
+
+			// Event to toggle layer visibility
+			toggleVisibleButton.on('click', function() {
+				var layer = platform.layers.getLayer(layerName, global);
+				if (layer.isVisible()) {
+					layer.hide();
+				} else {
+					layer.show();
+				}
+				$(this).toggleClass('active');
+
+			});
+
+			// Event to toggle global status
+			toggleGlobalLayerButton.on('click', function() {
+				var layer = platform.layers.getLayer(layerName, global);
+				if (platform.layers.toggleGlobalLayer(layer)) {
+					$(this).toggleClass('active');
+				}
+			});
+
+			// Event to toggle layer lock
+			lockLayerButton.on('click', function() {
+				var layer = platform.layers.getLayer(layerName, global);
+				if (platform.layers.lockLayer(layer)) {
+					$(this).toggleClass('active');
+				}
+			});
+
+			// Event to delete a layer
+			deleteLayerButton.on('click', function() {
+				if (layerName === 'globalLayer1') {
+					alert('This layer cannot be deleted');
+					return false;
+				}
+				if (confirm('Are you sure you want to delete this layer?')) {
+					var layer = platform.layers.getLayer(layerName, global);
+					if (platform.layers.deleteLayer(layer)) {
+						previewDiv.remove();
+					}
+				}
+			});
+		},
+
+		/**
+		 * Function to prevent non-numeric data being entered into numeric input fields
+		 */
+		restrictToNumericInput: function() {
+			// Only allow numeric key entry for fields with .numericOnly class
+			$('input[type="number"]').keydown(function(e) {
+
+				if ((e.keyCode >= 48 && e.keyCode <= 57) //numbers
+					|| (e.keyCode >= 96 && e.keyCode <= 105) //numpad number              
+					|| e.keyCode == 8 //backspace
+					|| e.keyCode == 9 //tab
+					|| e.keyCode == 13 //enter
+					|| e.keyCode == 16 //shift
+					|| e.keyCode == 37 //arrow left
+					|| e.keyCode == 39 //arrow right
+					|| e.keyCode == 46 //delete
+					|| e.keyCode == 110 //decimal point
+					|| e.keyCode == 190 //full stop
+				) {
+
+				} else {
+					return false;
+				}
+			});
+		},
+
+		/**
+		 * Export the current stage to a .png and open it in a new window for downloading
+		 */
+		saveToPNG: function() {
+			platform.stage.toDataURL({
+				mimeType: 'image/png',
+				callback: function(dataUrl) {
+					window.open(dataUrl);
+				}
+			});
+		}
+	},
+
+	/**
+	 * Function that initialises the drawing platform
+	 */
+	init: function() {
 		// Create the stage
 		platform.stage = new Kinetic.Stage({
 			container: 'stage',
@@ -1249,70 +1485,8 @@ var platform = {
 			$('.owner').prop('disabled', true);
 		}
 
-		if (platform.testing){
+		if (platform.testing && typeof testSuite == 'function') {
 			testSuite();
 		}
 	},
-	session: {
-		initSession: function(){
-			var username = $('#username').val();
-			var sessionName = $('#sessionName').val();
-			$.ajax({
-				url: '/initSession',
-				dataType: 'json',
-				data: {username: username, sessionName: sessionName},
-				method: "POST",
-				success: function(data){
-					$('body').html(data.body);
-					console.log(data);
-					user = new User(data.options);
-					_CONTAINER = document.getElementById('workspaceContainer').innerHTML;
-					platform.init();
-				}
-			});
-		},
-		joinSession: function(){
-			var username = $('#username').val();
-			var sessionName = $('#sessionName').val();
-			$.ajax({
-				url: '/joinSession',
-				dataType: 'json',
-				data: {username: username, sessionName: sessionName},
-				method: "POST",
-				success: function(data){
-					$('body').html(data.body);
-					console.log(data);
-					user = new User(data.options);
-					_CONTAINER = document.getElementById('workspaceContainer').innerHTML;
-					platform.init();
-					for (var i in data.users){
-						if (data.users[i] !== user.username) {
-							user.connectToPeer(data.options.sessionName + '_' + data.users[i]);
-						}
-					}
-				}
-			});
-		},
-		leaveSession: function(event){
-			delete user.peer;
-			delete user.connections;
-
-			$.ajax({
-				url: '/leaveSession',
-				data: {user: user},
-				method: 'POST',
-				async: false,
-				success: function(){
-					debugger;
-					window.location = event.target.URL;
-				},
-				error: function(a,b,c){
-					debugger;
-					console.log(a,b,c);
-				}
-			});
-		},
-	}
-	
-	
 };

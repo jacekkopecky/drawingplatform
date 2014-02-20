@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-	<title>Drawing Platform</title>
+	<title>TESTING - Drawing Platform</title>
 	<link rel="stylesheet" href="./css/bootstrap.min.css" />
 	<link rel="stylesheet" href="./css/custom.css" />
 
@@ -9,6 +9,7 @@
 	<script src="./js/bootstrap.min.js"></script>
 	<script src="./js/kinetic.js"></script>
 	<script src="./js/platform.js"></script>
+	<script src="./js/peer.js"></script>
 
 	<link rel="stylesheet" type="text/css" href="./jasmine/jasmine.css">
 	<script type="text/javascript" src="./jasmine/jasmine.js"></script>
@@ -92,3 +93,12 @@
 	<div id="jasmineContainer"></div>
 </body>
 </html>
+<script>
+var user = new User({username: 'will', securityProfile: 1, securityProfileName: 'sessionOwner'});
+var _CONTAINER;
+$(document).ready(function(){
+	_CONTAINER = $('#workspaceContainer').html();
+	platform.init();
+});
+
+</script>
