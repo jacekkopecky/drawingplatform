@@ -1,9 +1,36 @@
-/**
- * Frontend drawing platform object
- *
- * @author Will Albone
- */
+function User(options){
+	this.username = options.username;
+	this.sessionName = options.sessionName;
+	this.securityProfile = options.securityProfile;
+	this.securityProfileName = options.securityProfileName;
+	var peerName = options.sessionName + "_" + options.username;
+	this.peer = new Peer(peerName, {host: '192.168.0.3', port:9000});
+	this.peer.on('connection', function(conn){
+		conn.on('data', function(data){
+			console.log(data);
+		});
+	})
+	this.connections = []; 
+	this.connectToPeer = function(peerID){
+		console.log(this);
+		var connection = this.peer.connect(peerID);
+		this.connections.push(connection);
+	}
+	this.disconnectPeer = function(peerID){
+		for (var i in this.connections){
+			if (this.connections[i].peer = peerID) {
+				this.connections[i].close();
+				delete this.connections[i];
+			}
+		}
+	}
+};
+
+var _CONTAINER;
+var user;
+
 var platform = {
+	testing: false,
 	// Flag to check if the mouse is down
 	mouseDown: false,
 
@@ -822,7 +849,11 @@ var platform = {
 		},
 		// Adds event listeners to the the stage and UI elements
 		addEventListeners: function(){
-			
+			$(window).on('beforeunload', function(){
+				return "Leave session";
+			});
+			$(window).on('unload', platform.leaveSession);
+
 			var stageContent  = $(platform.stage.getContent());
 
 			// Add event listeners
@@ -855,6 +886,10 @@ var platform = {
 			$('#brushToolButton').click();
 
 			$('#eraserToolButton').on('click', platform.brush.eraser);
+
+			$('#workspaceContainer form').on('submit', function(event){
+				alert();
+			});
 
 		},
 		/**
@@ -1181,7 +1216,7 @@ var platform = {
 	/**
 	 * Function to initialise the drawing platform
 	 */
-	init: function(callback){
+	init: function(){
 		// Create the stage
 		platform.stage = new Kinetic.Stage({
 			container: 'stage',
@@ -1214,21 +1249,70 @@ var platform = {
 			$('.owner').prop('disabled', true);
 		}
 
-		if (callback){
-			callback();
+		if (platform.testing){
+			testSuite();
 		}
+	},
+	session: {
+		initSession: function(){
+			var username = $('#username').val();
+			var sessionName = $('#sessionName').val();
+			$.ajax({
+				url: '/initSession',
+				dataType: 'json',
+				data: {username: username, sessionName: sessionName},
+				method: "POST",
+				success: function(data){
+					$('body').html(data.body);
+					console.log(data);
+					user = new User(data.options);
+					_CONTAINER = document.getElementById('workspaceContainer').innerHTML;
+					platform.init();
+				}
+			});
+		},
+		joinSession: function(){
+			var username = $('#username').val();
+			var sessionName = $('#sessionName').val();
+			$.ajax({
+				url: '/joinSession',
+				dataType: 'json',
+				data: {username: username, sessionName: sessionName},
+				method: "POST",
+				success: function(data){
+					$('body').html(data.body);
+					console.log(data);
+					user = new User(data.options);
+					_CONTAINER = document.getElementById('workspaceContainer').innerHTML;
+					platform.init();
+					for (var i in data.users){
+						if (data.users[i] !== user.username) {
+							user.connectToPeer(data.options.sessionName + '_' + data.users[i]);
+						}
+					}
+				}
+			});
+		},
+		leaveSession: function(event){
+			delete user.peer;
+			delete user.connections;
+
+			$.ajax({
+				url: '/leaveSession',
+				data: {user: user},
+				method: 'POST',
+				async: false,
+				success: function(){
+					debugger;
+					window.location = event.target.URL;
+				},
+				error: function(a,b,c){
+					debugger;
+					console.log(a,b,c);
+				}
+			});
+		},
 	}
+	
+	
 };
-
-var user = {
-	username: "Will",
-	securityProfile: 1,
-	profileName: "sessionOwner"
-};
-
-var _CONTAINER;
-
-$(document).ready(function(){
-	_CONTAINER = document.getElementById('workspaceContainer').innerHTML;
-	platform.init(testSuite);
-});
