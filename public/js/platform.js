@@ -1214,6 +1214,30 @@ var platform = {
 				async: false
 			});
 		},
+
+		/**
+		 * Check session owners
+		 */
+		checkSessionOwners: function() {
+			var response = "Are you sure you want to leave the session?";
+			$.ajax({
+				url: '/checkSessionOwners',
+				data: {
+					sessionName: user.sessionName,
+					username: user.username
+				},
+				method: 'POST',
+				async: false, 
+				success: function(data){
+					if (!data.count) {
+						response = 'You are about to the leave the session. \n' + 
+							'You are the only session owner. \n' +
+							'All other users will be disconnected';
+					}
+				}
+			});
+			return response;
+		},
 	},
 
 	/**
@@ -1298,9 +1322,7 @@ var platform = {
 		 */
 		addEventListeners: function() {
 			// Event listeners for leaving a session
-			$(window).on('beforeunload', function() {
-				return "Leave session";
-			});
+			$(window).on('beforeunload', platform.session.checkSessionOwners);
 			$(window).on('unload', platform.session.leaveSession);
 
 			var stageContent = $(platform.stage.getContent());

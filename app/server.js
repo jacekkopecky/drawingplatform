@@ -191,6 +191,26 @@ isUsernameUnique = function(username, session){
     return true;
 }
 
+checkSessionOwners = function(request, response){
+    var postData = request.body;
+    var sessionName = postData.sessionName;
+    var username = postData.username;
+
+    var session = activeSessions[sessionName];
+    var ownerCount = 0;
+
+    for (var i in session.users) {
+        if (session.users[i].username !== username
+            && session.users[i].securityProfile == 1) {
+            ownerCount++;
+        }
+    }
+
+    // Set the header(s) and send
+    response.setHeader('Content-Type', 'text/json');
+    response.end(JSON.stringify({count: ownerCount}));
+}
+
 // Server initialisation and routing setup
 var app = express();
 app.use(express.static(__dirname + '/../public'));
@@ -212,6 +232,10 @@ app.post('/joinSession', function(request, response){
 
 app.post('/leaveSession', function(request, response){
     leaveSession(request, response);
+});
+
+app.post('/checkSessionOwners', function(request, response){
+    checkSessionOwners(request, response);
 });
 
 app.listen(8000);
