@@ -44,6 +44,15 @@ function User(options) {
 				delete this.connections[i];
 			}
 		}
+	},
+	this.disconnectedFromSession = function(){
+		alert('Session closed by server');
+		this.peer.destroy();
+		for (var i in this.connections){
+			this.connections[i].close();
+		}
+		this.connections = [];
+		platform.uninit();
 	}
 };
 
@@ -1147,6 +1156,9 @@ var platform = {
 
 					// Initialise the drawing platform
 					platform.init();
+				},
+				error: function(jqXHR){
+					alert(jqXHR.responseJSON.error);
 				}
 			});
 		},
@@ -1182,6 +1194,9 @@ var platform = {
 							user.connectToPeer(data.options.sessionName + '_' + data.users[i]);
 						}
 					}
+				},
+				error: function(jqXHR){
+					alert(jqXHR.responseJSON.error);
 				}
 			});
 		},
@@ -1446,6 +1461,92 @@ var platform = {
 					window.open(dataUrl);
 				}
 			});
+		},
+
+		/**
+		 * Removes event listeners from the stage and UI elements
+		 * @param  {boolean} removeSave
+		 */
+		removeEventListeners: function(removeSave) {
+			// Event listeners for leaving a session
+			$(window).off('beforeunload');
+			$(window).off('unload');
+
+			var stageContent = $(platform.stage.getContent());
+
+			// Drawing events
+			stageContent.off("mousedown mouseenter");
+			stageContent.off("mouseup mouseleave");
+			stageContent.off("mousemove");
+
+			// Undo / redo events
+			$('#userUndoButton').off('click');
+			$('#userRedoButton').off('click');
+			$('#globalUndoButton').off('click');
+			$('#globalRedoButton').off('click');
+
+			// Brush events
+			$('#brushSizeInput').off('change keyup');
+			$('#brushColorHex').off('change keyup');
+			$('#brushColorRed, #brushColorGreen, #brushColorBlue').off('change keyup');
+			$('#brushColorHue, #brushColorSat, #brushColorVal').off('change keyup');
+
+			if (removeSave){
+				// Save to PNG button
+				$('#saveToPNG').off('click');
+			}
+
+			// New layer button
+			$('#newLayerButton').off('click');
+
+			// Drawing tool buttons
+			$('#brushToolButton').off('click');
+			$('#eraserToolButton').off('click');
+
+			// Layer preview events
+			$('.layerPanel').off('click');
+			$('.toggleVisible').off('click');
+			$('.toggleGlobalLayer').off('click');
+			$('.lockLayer').off('click');
+			$('.deleteLayer').off('click');
+		},
+
+		/**
+		 * Disables all of the UI elements
+		 * @param  {boolean} disableSave
+		 */
+		disableUIElements: function(disableSave){
+			// Undo / redo buttons
+			$('#userUndoButton').prop('disabled', true);
+			$('#userRedoButton').prop('disabled', true);
+			$('#globalUndoButton').prop('disabled', true);
+			$('#globalRedoButton').prop('disabled', true);
+
+			// Brush size events
+			$('#brushSizeInput').prop('disabled', true);
+
+			// Brush color events
+			$('#brushColorHex').prop('disabled', true);
+			$('#brushColorRed, #brushColorGreen, #brushColorBlue').prop('disabled', true);
+			$('#brushColorHue, #brushColorSat, #brushColorVal').prop('disabled', true);
+
+			if (disableSave){
+				// Save to PNG button
+				$('#saveToPNG').prop('disabled', true);
+			}
+
+			// New layer button
+			$('#newLayerButton').prop('disabled', true);
+
+			// Drawing tool buttons
+			$('#brushToolButton').prop('disabled', true);
+			$('#eraserToolButton').prop('disabled', true);
+
+			// Layer preview buttons
+			$('.toggleVisible').prop('disabled', true);
+			$('.toggleGlobalLayer').prop('disabled', true);
+			$('.lockLayer').prop('disabled', true);
+			$('.deleteLayer').prop('disabled', true);
 		}
 	},
 
@@ -1488,5 +1589,12 @@ var platform = {
 		if (platform.testing && typeof testSuite == 'function') {
 			testSuite();
 		}
+	},
+	/**
+	 * Function that uninitialises the drawing platform
+	 */
+	uninit: function() {
+		platform.util.removeEventListeners();
+		platform.util.disableUIElements();
 	},
 };

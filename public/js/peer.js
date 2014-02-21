@@ -1580,6 +1580,9 @@ Peer.prototype._handleMessage = function(message) {
     case 'DISCONNECT_PEER':
       user.disconnectPeer(message.peerID);
       break;
+    case 'DISCONNECTED_FROM_SESSION':
+      user.disconnectedFromSession();
+      break;
     default:
       if (!payload) {
         util.warn('You received a malformed message from ' + peer + ' of type ' + type);
