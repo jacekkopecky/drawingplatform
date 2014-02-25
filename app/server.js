@@ -1,7 +1,7 @@
 Session = function(){
     this.active = true;
     this.users = [];
-}
+};
 
 var express = require('express'),
     fs = require('fs'),
@@ -79,7 +79,7 @@ function joinSession(request, response){
                 sessionName: sessionName,
                 securityProfile: 2,
                 securityProfileName: 'contributor'
-            }
+            };
 
             // Add the user to the session
             session.users.push(user);
@@ -159,7 +159,7 @@ function leaveSession(request, response){
  * @param  {array} users Array of users to disconnect
  */
 disconnectUsers = function(users){
-    var clients = peerServer._clients['peerjs'];
+    var clients = peerServer._clients.peerjs;
     for (var i in users){
         for (var j in clients){
             if (clients[j] && j.split('_')[0] == users[i].sessionName){
@@ -189,7 +189,7 @@ isUsernameUnique = function(username, session){
         }
     }
     return true;
-}
+};
 
 checkSessionOwners = function(request, response){
     var postData = request.body;
@@ -200,8 +200,7 @@ checkSessionOwners = function(request, response){
     var ownerCount = 0;
 
     for (var i in session.users) {
-        if (session.users[i].username !== username
-            && session.users[i].securityProfile == 1) {
+        if (session.users[i].username !== username && session.users[i].securityProfile == 1) {
             ownerCount++;
         }
     }
@@ -209,7 +208,7 @@ checkSessionOwners = function(request, response){
     // Set the header(s) and send
     response.setHeader('Content-Type', 'text/json');
     response.end(JSON.stringify({count: ownerCount}));
-}
+};
 
 // Server initialisation and routing setup
 var app = express();
@@ -255,7 +254,7 @@ peerServer.on('connection', function(id){
     sessionID = sessionID[0];
 
     // Get all connected peers
-    var clients = this._clients['peerjs'];
+    var clients = this._clients.peerjs;
 
     // For peers in the same session send a CONNECT_TO_PEER message with the ID of the new peer
     for (var i in clients){
@@ -279,15 +278,16 @@ peerServer.on('disconnect', function(id){
     sessionID = sessionID[0];
 
     // Get all connected peers
-    var clients = this._clients['peerjs'];
+    var clients = this._clients.peerjs;
 
     // For peers in the same session send a DISCONNECT_PEER message with the ID of the disconnected peer
     for (var i in clients){
-        if (i.split('_')[0] == sessionID && i != id){
+        if (clients[i] && i.split('_')[0] == sessionID && i != id){
             var message = {
                 type: 'DISCONNECT_PEER',
                 peerID: id
             };
+
             clients[i].socket.send(JSON.stringify(message));
         }
     }

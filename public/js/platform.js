@@ -14,47 +14,64 @@ function User(options) {
 	// Create the peer object and assign it's event handler(s)
 	var peerName = options.sessionName + "_" + options.username;
 	this.peer = new Peer(peerName, {
-		host: '192.168.0.3',
+		host: '/',
 		port: 9000
 	});
+
 	this.peer.on('connection', function(conn) {
 		conn.on('data', function(data) {
 			console.log(data);
+			switch (data.message) {
+				case 'GET_PLATFORM_DATA':
+					user.setIntervalTimer = setInterval(function() {
+						platform.session.sendEverything(data.sendTo);
+					}, 100);
+					break;
+				case 'GOT_PLATFORM_DATA':
+					if (user.setIntervalTimer) clearInterval(user.setIntervalTimer);
+					if (!platform.gotPlatformData) {
+						platform.gotPlatformData = data.data;
+					}
+					platform.init();
+					break;
+				default:
+					// console.log(data);
+					break;
+			}
 		});
-	})
+	});
 
-	this.connections = [];
+	this.connections = {};
 	/**
 	 * Function to connect to another peer
 	 *
 	 * @param  {String} peerID The id of the peer to connect to
 	 */
 	this.connectToPeer = function(peerID) {
-		var connection = this.peer.connect(peerID);
-		this.connections.push(connection);
-	}
+		this.connections[peerID] = this.peer.connect(peerID);
+	};
 	/**
 	 * Function to disconnect from a peer
 	 * @param  {String} peerID The id of the peer to disconnect
 	 */
 	this.disconnectPeer = function(peerID) {
 		for (var i in this.connections) {
-			if (this.connections[i].peer = peerID) {
+			if (this.connections[i].peer === peerID) {
 				this.connections[i].close();
 				delete this.connections[i];
 			}
 		}
 	},
-	this.disconnectedFromSession = function(){
+	this.disconnectedFromSession = function() {
 		alert('Session closed by server');
 		this.peer.destroy();
-		for (var i in this.connections){
+		for (var i in this.connections) {
 			this.connections[i].close();
 		}
-		this.connections = [];
+		this.connections = {};
 		platform.uninit();
-	}
-};
+	};
+}
 
 var _CONTAINER;
 var user;
@@ -70,12 +87,12 @@ var user;
  * @type {Object}
  */
 var platform = {
+	gotPlatformData: false,
 	activeLayer: {}, // Contains the layer currently selected for editing
 	stage: {}, // Contains the Kinetic.Stage object
 
-	testing: true, // Flag for whether unit tests should be run
 	mouseDown: false, // Flag to check if the mouse is down
-
+	temp: false,
 	/**
 	 * The brush object
 	 * Stores all parameters and functions associated with the brush tool
@@ -251,7 +268,9 @@ var platform = {
 			max = Math.max(r, g, b);
 			min = Math.min(r, g, b);
 
-			hue, sat, val = max;
+			hue = max;
+			sat = max;
+			val = max;
 
 			if (max == min) {
 				hue = 0;
@@ -265,11 +284,11 @@ var platform = {
 				if (r == max) {
 					hue = bc - gc;
 				} else if (g == max) {
-					hue = 2.0 + rc - bc
+					hue = 2.0 + rc - bc;
 				} else {
-					hue = 4.0 + gc - rc
+					hue = 4.0 + gc - rc;
 				}
-				hue = (hue / 6.0) % 1.0
+				hue = (hue / 6.0) % 1.0;
 			}
 			hue = hue * 360;
 			if (hue < 0) {
@@ -328,22 +347,34 @@ var platform = {
 
 			switch (i % 6) {
 				case 0:
-					r = val, g = t, b = p;
+					r = val;
+					g = t;
+					b = p;
 					break;
 				case 1:
-					r = q, g = val, b = p;
+					r = q;
+					g = val;
+					b = p;
 					break;
 				case 2:
-					r = p, g = val, b = t;
+					r = p;
+					g = val;
+					b = t;
 					break;
 				case 3:
-					r = p, g = q, b = val;
+					r = p;
+					g = q;
+					b = val;
 					break;
 				case 4:
-					r = t, g = p, b = val;
+					r = t;
+					g = p;
+					b = val;
 					break;
 				case 5:
-					r = val, g = p, b = q;
+					r = val;
+					g = p;
+					b = q;
 					break;
 			}
 
@@ -451,7 +482,7 @@ var platform = {
 				alert(error.message);
 			}
 		},
-		
+
 		/**
 		 * Mouseup event callback for line drawing
 		 * @param  {Event} event The mouseup event
@@ -526,7 +557,7 @@ var platform = {
 	layers: {
 		// Code snippet used for creating layer preview panels
 		layerPreviewSnippet: '<div class="layerPanel" id="[LAYER_NAME]"><div class="layerPreview" id="[LAYER_NAME]Preview"></div><label>[LAYER_NAME]</label><div class="layerButtons"><button type="button" class="btn btn-default btn-xs toggleVisible"><span class="glyphicon glyphicon-eye-open"></span></button><button type="button" class="btn btn-default btn-xs toggleGlobalLayer"><span class="glyphicon glyphicon-globe"></span></button><button type="button" class="btn btn-default btn-xs lockLayer"><span class="glyphicon glyphicon-lock"></span></button><button type="button" class="btn btn-default btn-xs deleteLayer"><span class="glyphicon glyphicon-trash"></span></button></div><div style="clear:both"></div></div>',
-		
+
 		/**
 		 * Function that creates the global background layer
 		 */
@@ -547,10 +578,11 @@ var platform = {
 		 * Function that creates a new layer and adds it to the canvas
 		 * @param {Kinetic.Layer} layer            The layer being created or added
 		 * @param {boolean}       global           Whether the layer is global
-		 * @param {boolean} 	  securityOverride Whether security checks should be ignored
-		 * @param {boolean} 	  historyOverride  Whether the action should be added to the histories
+		 * @param {boolean}       securityOverride Whether security checks should be ignored
+		 * @param {boolean}       historyOverride  Whether the action should be added to the histories
 		 */
 		addLayer: function(layer, global, securityOverride, historyOverride) {
+			// debugger;
 			try {
 				// Check if user can add layeres
 				if (!securityOverride) {
@@ -1157,7 +1189,7 @@ var platform = {
 					// Initialise the drawing platform
 					platform.init();
 				},
-				error: function(jqXHR){
+				error: function(jqXHR) {
 					alert(jqXHR.responseJSON.error);
 				}
 			});
@@ -1185,17 +1217,26 @@ var platform = {
 					// Create the use object
 					user = new User(data.options);
 
-					// Initialise the drawing platform
-					platform.init();
-
 					// Connect to the other users in the session
 					for (var i in data.users) {
-						if (data.users[i] !== user.username) {
-							user.connectToPeer(data.options.sessionName + '_' + data.users[i]);
+						if (data.users[i].username !== user.username) {
+							user.connectToPeer(data.options.sessionName + '_' + data.users[i].username);
 						}
 					}
+
+					for (var j in user.connections) {
+
+						var conn = user.connections[j];
+						conn.on('open', function() {
+							conn.send({
+								message: 'GET_PLATFORM_DATA',
+								sendTo: user.peer.id
+							});
+						});
+
+					}
 				},
-				error: function(jqXHR){
+				error: function(jqXHR) {
 					alert(jqXHR.responseJSON.error);
 				}
 			});
@@ -1227,10 +1268,10 @@ var platform = {
 					username: user.username
 				},
 				method: 'POST',
-				async: false, 
-				success: function(data){
+				async: false,
+				success: function(data) {
 					if (!data.count) {
-						response = 'You are about to the leave the session. \n' + 
+						response = 'You are about to the leave the session. \n' +
 							'You are the only session owner. \n' +
 							'All other users will be disconnected';
 					}
@@ -1238,6 +1279,36 @@ var platform = {
 			});
 			return response;
 		},
+
+		sendEverything: function(connectionID) {
+			var globalLayers = {};
+			var localLayers = {};
+
+			for (var i in platform.layers.globalLayers) {
+				globalLayers[i] = platform.layers.globalLayers[i].toJSON();
+			}
+
+			for (var j in platform.layers.localLayers) {
+				localLayers[j] = platform.layers.localLayers[j].toJSON();
+			}
+
+			var toSend = {
+				message: 'GOT_PLATFORM_DATA',
+				data: {
+					globalLayers: globalLayers,
+					localLayers: localLayers,
+					globalHistory: platform.history.globalHistory,
+					globalRedo: platform.history.globalRedo
+				}
+			};
+
+			if (user.connections[connectionID].open) {
+				clearInterval(user.setIntervalTimer);
+			}
+
+			user.connections[connectionID].send(toSend);
+
+		}
 	},
 
 	/**
@@ -1245,6 +1316,9 @@ var platform = {
 	 * @type {Object}
 	 */
 	util: {
+		dummy: function() {
+
+		},
 
 		/**
 		 * Function to get the mouse position when entering the stage as KineticJS doesn't
@@ -1454,18 +1528,7 @@ var platform = {
 			// Only allow numeric key entry for fields with .numericOnly class
 			$('input[type="number"]').keydown(function(e) {
 
-				if ((e.keyCode >= 48 && e.keyCode <= 57) //numbers
-					|| (e.keyCode >= 96 && e.keyCode <= 105) //numpad number              
-					|| e.keyCode == 8 //backspace
-					|| e.keyCode == 9 //tab
-					|| e.keyCode == 13 //enter
-					|| e.keyCode == 16 //shift
-					|| e.keyCode == 37 //arrow left
-					|| e.keyCode == 39 //arrow right
-					|| e.keyCode == 46 //delete
-					|| e.keyCode == 110 //decimal point
-					|| e.keyCode == 190 //full stop
-				) {
+				if ((e.keyCode >= 48 && e.keyCode <= 57) || (e.keyCode >= 96 && e.keyCode <= 105) || e.keyCode == 8 || e.keyCode == 9 || e.keyCode == 13 || e.keyCode == 16 || e.keyCode == 37 || e.keyCode == 39 || e.keyCode == 46 || e.keyCode == 110 || e.keyCode == 190) {
 
 				} else {
 					return false;
@@ -1513,7 +1576,7 @@ var platform = {
 			$('#brushColorRed, #brushColorGreen, #brushColorBlue').off('change keyup');
 			$('#brushColorHue, #brushColorSat, #brushColorVal').off('change keyup');
 
-			if (removeSave){
+			if (removeSave) {
 				// Save to PNG button
 				$('#saveToPNG').off('click');
 			}
@@ -1537,7 +1600,7 @@ var platform = {
 		 * Disables all of the UI elements
 		 * @param  {boolean} disableSave
 		 */
-		disableUIElements: function(disableSave){
+		disableUIElements: function(disableSave) {
 			// Undo / redo buttons
 			$('#userUndoButton').prop('disabled', true);
 			$('#userRedoButton').prop('disabled', true);
@@ -1552,7 +1615,7 @@ var platform = {
 			$('#brushColorRed, #brushColorGreen, #brushColorBlue').prop('disabled', true);
 			$('#brushColorHue, #brushColorSat, #brushColorVal').prop('disabled', true);
 
-			if (disableSave){
+			if (disableSave) {
 				// Save to PNG button
 				$('#saveToPNG').prop('disabled', true);
 			}
@@ -1583,21 +1646,50 @@ var platform = {
 			height: 506
 		});
 
-		// Create the background layer
-		platform.layers.createBackgroundLayer();
+		if (!platform.gotPlatformData) {
+			// Create the background layer
+			platform.layers.createBackgroundLayer();
 
-		// Add the layers to the stage
-		for (var i in platform.layers.globalLayers) {
-			platform.layers.addLayer(platform.layers.globalLayers[i], true, true, true);
+			// Add the layers to the stage
+			for (var i in platform.layers.globalLayers) {
+				platform.layers.addLayer(platform.layers.globalLayers[i], true, true, true);
+			}
+
+		} else {
+			platform.history.globalHistory = platform.gotPlatformData.globalHistory;
+			platform.history.globalRedo = platform.gotPlatformData.globalRedo;
+
+			platform.layers.globalLayers = platform.gotPlatformData.globalLayers;
+			platform.layers.localLayers = platform.gotPlatformData.localLayers;
+
+			platform.stage.destroyChildren();
+
+			for (var gl in platform.layers.globalLayers) {
+				platform.stage.add(Kinetic.Node.create(platform.layers.globalLayers[gl]));
+				platform.stage.children[platform.stage.children.length - 1].setZIndex(platform.stage.children[platform.stage.children.length - 1].getAttr('Z-Index'));
+			}
+
+			for (var ll in platform.layers.localLayers) {
+				platform.stage.add(Kinetic.Node.create(platform.layers.localLayers[ll]));
+				platform.stage.children[platform.stage.children.length - 1].setZIndex(platform.stage.children[platform.stage.children.length - 1].getAttr('Z-Index'));
+			}
+
+
+			// Rebuild the layer model used by the platform
+			platform.layers.rebuildLayerModel();
+
+			// Redraw the canvas
+			platform.stage.drawScene();
 		}
 
+		// Add a history entry so there is always an initial state to go back to
 		platform.history.addToHistory();
 
 		platform.brush.changeBrushSize(3);
 		platform.brush.changeBrushColorHex('000000');
 
 		// Set the active layer
-		for (first in platform.layers.globalLayers) break;
+		for (var first in platform.layers.globalLayers) break;
 		platform.activeLayer = platform.layers.globalLayers[first];
 
 		platform.util.addEventListeners();
@@ -1606,10 +1698,6 @@ var platform = {
 		$('button').tooltip();
 		if (user.securityProfile > 1) {
 			$('.owner').prop('disabled', true);
-		}
-
-		if (platform.testing && typeof testSuite == 'function') {
-			testSuite();
 		}
 	},
 	/**
