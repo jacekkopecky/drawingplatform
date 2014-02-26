@@ -20,7 +20,9 @@ function User(options) {
 
 	this.peer.on('connection', function(conn) {
 		conn.on('data', function(data) {
-			console.log(data);
+			if (!data) {
+				return;
+			}
 			switch (data.message) {
 				case 'GET_PLATFORM_DATA':
 					user.setIntervalTimer = setInterval(function() {
@@ -34,8 +36,21 @@ function User(options) {
 					}
 					platform.init();
 					break;
+				case 'RECEIVED_LAYER':
+					platform.layers.updateReceivedLayer(data.data);
+					break;
+				case 'DELETE_LAYER':
+					var layer = platform.layers.getLayer(data.data.layerName, data.data.global);
+					platform.layers.deleteLayer(layer, true, true);
+					$('#' + data.data.layerName).remove();
+					break;
+				case 'LOCK_LAYER':
+					var layer = platform.layers.getLayer(data.data.layerName, data.data.global);
+					platform.layers.lockLayer(layer, true);
+					$('#' + data.data.layerName + ' .lockLayer').toggleClass('active');
+					break;
 				default:
-					// console.log(data);
+					console.log(data);
 					break;
 			}
 		});
@@ -61,7 +76,7 @@ function User(options) {
 				delete this.connections[i];
 			}
 		}
-	},
+	};
 	this.disconnectedFromSession = function() {
 		alert('Session closed by server');
 		this.peer.destroy();
@@ -479,6 +494,8 @@ var platform = {
 				// Add the new line to the active layer
 				platform.activeLayer.add(platform.drawLine.newLine);
 			} catch (error) {
+				console.error(error);
+
 				alert(error.message);
 			}
 		},
@@ -533,6 +550,7 @@ var platform = {
 			if (addToHistory) {
 				platform.history.addToHistory(platform.activeLayer);
 			}
+			platform.session.sendLayerToAll(platform.activeLayer);
 		},
 
 		/**
@@ -582,7 +600,6 @@ var platform = {
 		 * @param {boolean}       historyOverride  Whether the action should be added to the histories
 		 */
 		addLayer: function(layer, global, securityOverride, historyOverride) {
-			// debugger;
 			try {
 				// Check if user can add layeres
 				if (!securityOverride) {
@@ -638,6 +655,7 @@ var platform = {
 				// Store the zindex and key number so that we can keep things organised when undo / redo-ing
 				layer.setAttr('Z-Index', layer.getZIndex());
 				layer.setAttr('layerObjectKey', key);
+				layer.setAttr('layerName', layerName);
 
 				// Make the new layer the active layer
 				platform.activeLayer = layer;
@@ -647,7 +665,10 @@ var platform = {
 
 				// Add to history
 				if (!historyOverride) platform.history.addToHistory();
+
+				platform.session.sendLayerToAll(layer);
 			} catch (error) {
+				console.error(error);
 				alert(error.message);
 			}
 
@@ -659,19 +680,21 @@ var platform = {
 		 * @param  {Kinetic.Layer} layer The layer to be toggled
 		 * @return {boolean}       Was the toggle successful?
 		 */
-		lockLayer: function(layer) {
+		lockLayer: function(layer, securityOverride) {
 			try {
-				if (layer.getAttr('global')) {
-					// Check user can lock global layers
-					platform.util.isSessionOwner(user);
-				} else {
-					// Check the user is able to lock local layers
-					platform.util.isContributor(user);
+				if (!securityOverride) {
+					if (layer.getAttr('global')) {
+						// Check user can lock global layers
+						platform.util.isSessionOwner(user);
+					} else {
+						// Check the user is able to lock local layers
+						platform.util.isContributor(user);
 
-					// Check that the user owns the layer they are trying to lock
-					platform.util.isLayerOwner(layer, user);
+						// Check that the user owns the layer they are trying to lock
+						platform.util.isLayerOwner(layer, user);
+					}
 				}
-
+					
 				if (layer.getAttr('locked')) {
 					layer.setAttr('locked', false);
 				} else {
@@ -680,6 +703,7 @@ var platform = {
 				return true;
 
 			} catch (error) {
+				console.error(error);
 				alert(error.message);
 				return false;
 			}
@@ -704,6 +728,7 @@ var platform = {
 				return true;
 
 			} catch (error) {
+				console.error(error);
 				alert(error.message);
 				return false;
 			}
@@ -714,9 +739,13 @@ var platform = {
 		 * @param  {Kinetic.Layer} layer The layer to be delete
 		 * @return {boolean}       Was the delete successful?
 		 */
-		deleteLayer: function(layer) {
+		deleteLayer: function(layer, securityOverride, ignoreSend) {
+
 			try {
-				platform.util.isLayerLocked(layer);
+				var layerName = layer.getAttr('layerName');
+				var global = layer.getAttr('global');
+
+				if (!securityOverride) platform.util.isLayerLocked(layer);
 
 				// Make sure we always have a layer on the stage
 				if ((Object.keys(this.globalLayers).length === 1 && !Object.keys(this.localLayers).length) ||
@@ -724,38 +753,31 @@ var platform = {
 					throw new Error('Can\'t delete as there would be no layers left!');
 				}
 
-				if (layer.getAttr('global')) {
+				if (global) {
 					// Check user can delete global layers
-					platform.util.isSessionOwner(user);
+					if (!securityOverride) platform.util.isSessionOwner(user);
 
-					// Delete the layer from the global layers and the canvas
-					for (var g in this.globalLayers) {
-						if (this.globalLayers[g] === layer) {
-							delete this.globalLayers[g];
-							layer.destroy();
-							platform.history.addToHistory();
-							return true;
-						}
-					}
+					this.globalLayers[layerName].destroy();
+					delete this.globalLayers[layerName];
+
 				} else {
 					// Check the user is able to delete local layers
-					platform.util.isContributor(user);
+					if (!securityOverride) platform.util.isContributor(user);
 
 					// Check that the user owns the layer they are trying to delete
-					platform.util.isLayerOwner(layer, user);
+					if (!securityOverride) platform.util.isLayerOwner(layer, user);
 
 					// Delete the layer from the local layers and the canvas
-					for (var i in this.localLayers) {
-						if (this.localLayers[i] === layer) {
-							delete this.localLayers[i];
-							layer.destroy();
-							platform.history.addToHistory();
-							return true;
-						}
-					}
+					this.localLayers[layerName].destroy();
+					delete this.localLayers[layerName];
 				}
+				
+				if (!ignoreSend) platform.session.sendLayerToDelete(layerName, global);
+				platform.history.addToHistory();
+				return true;
 
 			} catch (error) {
+				console.error(error);
 				alert(error.message);
 				return false;
 			}
@@ -765,7 +787,7 @@ var platform = {
 		 * Function to rebuild the layer model
 		 * This is used after an undo or redo action and is mainly used to restore correct references
 		 */
-		rebuildLayerModel: function() {
+		rebuildLayerModel: function(activeLayerName) {
 			// Empty the layer model
 			this.globalLayers = {};
 			this.localLayers = {};
@@ -778,17 +800,23 @@ var platform = {
 				// Ignore anything that is not an object
 				if (typeof currentLayers[i] !== 'object') continue;
 
+				currentLayers[i].setZIndex(currentLayers[i].getAttr('Z-Index'));
+
+				var layerName = currentLayers[i].getAttr('layerName');
+				if (layerName === activeLayerName) platform.activeLayer = currentLayers[i];
+
 				if (currentLayers[i].getAttr('global')) {
-					this.globalLayers['globalLayer' + currentLayers[i].getAttr('layerObjectKey')] = currentLayers[i];
+					this.globalLayers[layerName] = currentLayers[i];
 				} else {
-					this.localLayers['localLayer' + currentLayers[i].getAttr('layerObjectKey')] = currentLayers[i];
+					this.localLayers[layerName] = currentLayers[i];
 				}
+
 			}
 
 			// Rejig the layer preview panels to work with updated stage
 			this.rebuildLayerPreviews(currentLayers);
 
-			platform.activeLayer.getAttr('preview').getContainer().click();
+			$('#' + activeLayerName).click();
 		},
 
 		/**
@@ -924,6 +952,27 @@ var platform = {
 			} else {
 				return platform.layers.localLayers[layerName];
 			}
+		},
+
+		updateReceivedLayer: function(json) {
+			var layer = Kinetic.Node.create(json);
+			var layerName = layer.getAttr('layerName');
+			var activeLayerName = platform.activeLayer.getAttr('layerName');
+
+			if (layer.getAttr('global')) {
+				if (platform.layers.globalLayers[layerName]) {
+					platform.layers.globalLayers[layerName].destroy();
+				}
+				platform.layers.globalLayers[layerName] = layer;
+			} else {
+				if (platform.layers.localLayers[layerName]) {
+					platform.layers.localLayers[layerName].destroy();
+				}
+				platform.layers.localLayers[layerName] = layer;
+			}
+
+			platform.stage.add(layer);
+			platform.layers.rebuildLayerModel(activeLayerName);
 		},
 		globalLayers: {},
 		localLayers: {}
@@ -1062,7 +1111,7 @@ var platform = {
 				}
 
 				// Rebuild the layer model used by the platform
-				platform.layers.rebuildLayerModel();
+				platform.layers.rebuildLayerModel(platform.activeLayer.getAttr('layerName'));
 
 				// Redraw the canvas
 				stage.drawScene();
@@ -1147,7 +1196,7 @@ var platform = {
 				}
 
 				// Rebuild the layer model used by the platform
-				platform.layers.rebuildLayerModel();
+				platform.layers.rebuildLayerModel(platform.activeLayer.getAttr('layerName'));
 
 				// Redraw the scene
 				stage.drawScene();
@@ -1308,7 +1357,47 @@ var platform = {
 
 			user.connections[connectionID].send(toSend);
 
-		}
+		},
+
+		sendLayerToAll: function(layer) {
+			var JSONlayer = layer.toJSON();
+			var toSend = {
+				message: 'RECEIVED_LAYER',
+				data: JSONlayer
+			};
+
+			for (var i in user.connections) {
+				user.connections[i].send(toSend);
+			}
+		},
+
+		sendLayerToDelete: function(layerName, global) {
+			var toSend = {
+				message: 'DELETE_LAYER',
+				data: {
+					layerName: layerName,
+					global: global
+				}
+			};
+
+			for (var i in user.connections) {
+				user.connections[i].send(toSend);
+			}
+		},
+
+		sendLayerToLock: function(layerName, global) {
+			var toSend = {
+				message: 'LOCK_LAYER',
+				data: {
+					layerName: layerName,
+					global: global
+				}
+			};
+
+			for (var i in user.connections) {
+				user.connections[i].send(toSend);
+			}
+		},
 	},
 
 	/**
@@ -1502,6 +1591,7 @@ var platform = {
 			lockLayerButton.on('click', function() {
 				var layer = platform.layers.getLayer(layerName, global);
 				if (platform.layers.lockLayer(layer)) {
+					platform.session.sendLayerToLock(layerName, global);
 					$(this).toggleClass('active');
 				}
 			});
@@ -1676,7 +1766,7 @@ var platform = {
 
 
 			// Rebuild the layer model used by the platform
-			platform.layers.rebuildLayerModel();
+			platform.layers.rebuildLayerModel('globalLayer1');
 
 			// Redraw the canvas
 			platform.stage.drawScene();

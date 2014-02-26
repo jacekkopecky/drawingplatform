@@ -221,6 +221,18 @@ app.get('/', function(request, response){
     response.end(body);
 });
 
+app.get('/error_log', function(request, response){
+    response.setHeader('Content-Type', 'text/plain');
+    var body = fs.readFileSync(__dirname + '/logs/error.log');
+    response.end(body);
+});
+
+app.get('/server_log', function(request, response){
+    response.setHeader('Content-Type', 'text/plain');
+    var body = fs.readFileSync(__dirname + '/logs/out.log');
+    response.end(body);
+});
+
 app.post('/initSession', function(request, response){
     initSession(request, response);
 });
