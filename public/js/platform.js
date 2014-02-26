@@ -23,6 +23,11 @@ function User(options) {
 			if (!data) {
 				return;
 			}
+			var layer;
+			if (data.data.layerName) {
+				layer = platform.layers.getLayer(data.data.layerName, data.data.global);
+			}
+
 			switch (data.message) {
 				case 'GET_PLATFORM_DATA':
 					user.setIntervalTimer = setInterval(function() {
@@ -40,12 +45,10 @@ function User(options) {
 					platform.layers.updateReceivedLayer(data.data);
 					break;
 				case 'DELETE_LAYER':
-					var layer = platform.layers.getLayer(data.data.layerName, data.data.global);
 					platform.layers.deleteLayer(layer, true, true);
 					$('#' + data.data.layerName).remove();
 					break;
 				case 'LOCK_LAYER':
-					var layer = platform.layers.getLayer(data.data.layerName, data.data.global);
 					platform.layers.lockLayer(layer, true);
 					$('#' + data.data.layerName + ' .lockLayer').toggleClass('active');
 					break;
@@ -494,8 +497,6 @@ var platform = {
 				// Add the new line to the active layer
 				platform.activeLayer.add(platform.drawLine.newLine);
 			} catch (error) {
-				console.error(error);
-
 				alert(error.message);
 			}
 		},
@@ -668,7 +669,6 @@ var platform = {
 
 				platform.session.sendLayerToAll(layer);
 			} catch (error) {
-				console.error(error);
 				alert(error.message);
 			}
 
@@ -703,7 +703,6 @@ var platform = {
 				return true;
 
 			} catch (error) {
-				console.error(error);
 				alert(error.message);
 				return false;
 			}
@@ -728,7 +727,6 @@ var platform = {
 				return true;
 
 			} catch (error) {
-				console.error(error);
 				alert(error.message);
 				return false;
 			}
@@ -777,7 +775,6 @@ var platform = {
 				return true;
 
 			} catch (error) {
-				console.error(error);
 				alert(error.message);
 				return false;
 			}
