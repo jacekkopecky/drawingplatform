@@ -6,12 +6,6 @@ module.exports = function(grunt) {
         jshint: {
             files: ['Gruntfile.js', 'app/server.js', 'public/js/platform.js'],
             options: {
-                globals: {
-                    jQuery: true,
-                    console: true,
-                    module: true,
-                    document: true
-                },
                 force: true,
                 reporter: require('jshint-stylish')
             },
@@ -36,8 +30,6 @@ module.exports = function(grunt) {
                         'public/js/kinetic.js', 
                         'public/js/peer.js'
                     ],
-                    '--web-security' : false,
-                    '--local-to-remote-url-access' : true,
                 }
             }
         },

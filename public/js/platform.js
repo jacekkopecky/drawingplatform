@@ -20,11 +20,10 @@ function User(options) {
 
 	this.peer.on('connection', function(conn) {
 		conn.on('data', function(data) {
-			if (!data) {
-				return;
-			}
-			var layer;
-			if (data.data.layerName) {
+			if (!data) { return; }
+
+			if (typeof data.data !== 'undefined') {
+				var layer;
 				layer = platform.layers.getLayer(data.data.layerName, data.data.global);
 			}
 
@@ -91,7 +90,6 @@ function User(options) {
 	};
 }
 
-var _CONTAINER;
 var user;
 
 /**
@@ -1217,6 +1215,11 @@ var platform = {
 			var username = $('#username').val();
 			var sessionName = $('#sessionName').val();
 
+			if (username === "" || sessionName === "") {
+				platform.util.alert("Please enter a username and session name");
+				return;
+			}
+
 			$.ajax({
 				url: '/initSession',
 				dataType: 'json',
@@ -1236,7 +1239,7 @@ var platform = {
 					platform.init();
 				},
 				error: function(jqXHR) {
-					alert(jqXHR.responseJSON.error);
+					platform.util.alert(jqXHR.responseJSON.error);
 				}
 			});
 		},
@@ -1248,6 +1251,12 @@ var platform = {
 		joinSession: function() {
 			var username = $('#username').val();
 			var sessionName = $('#sessionName').val();
+			
+			if (username === "" || sessionName === "") {
+				platform.util.alert("Please enter a username and session name");
+				return;
+			}
+
 			$.ajax({
 				url: '/joinSession',
 				dataType: 'json',
@@ -1283,7 +1292,7 @@ var platform = {
 					}
 				},
 				error: function(jqXHR) {
-					alert(jqXHR.responseJSON.error);
+					platform.util.alert(jqXHR.responseJSON.error);
 				}
 			});
 		},
@@ -1402,10 +1411,8 @@ var platform = {
 	 * @type {Object}
 	 */
 	util: {
-		dummy: function() {
-
-		},
-
+		_ALERT: '<div class="alert alert-danger alert-dismissable"><button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button><strong>Error!</strong> ERROR_TEXT</div>',
+		_WARNING_CONTAINER: $('#warningContainer'),
 		/**
 		 * Function to get the mouse position when entering the stage as KineticJS doesn't
 		 * detect the position onmouseenter
@@ -1719,6 +1726,15 @@ var platform = {
 			$('.toggleGlobalLayer').prop('disabled', true);
 			$('.lockLayer').prop('disabled', true);
 			$('.deleteLayer').prop('disabled', true);
+		},
+		alert: function(message){
+			if (!this._WARNING_CONTAINER.length) {
+				this._WARNING_CONTAINER = $('#warningContainer');
+			}
+
+			var alert = this._ALERT;
+			alert = alert.replace('ERROR_TEXT', message);
+			this._WARNING_CONTAINER.html(alert);
 		}
 	},
 
