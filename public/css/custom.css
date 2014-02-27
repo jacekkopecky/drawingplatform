@@ -75,3 +75,15 @@ html, body{
 	float:right;
 	margin-top: 6px;
 }
+
+input[type="color"]{
+	padding: 0;
+}
+
+.sp-replacer{
+	width: 99%;
+}
+
+.sp-preview{
+	width: 80%!important;
+}

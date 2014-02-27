@@ -146,7 +146,15 @@ var platform = {
 
 			// If color is an object then we need to get the value
 			if (typeof brushColorHex === 'object') {
-				brushColorHex = $('#brushColorHex').val();
+				if (brushColorHex.currentTarget.id === "colorPicker") {
+					brushColorHex = brushColorHex.currentTarget.value.replace('#', '');
+					$('#brushColorHex').val(brushColorHex);
+				} else {
+					brushColorHex = brushColorHex.currentTarget.value;
+					$('#colorPicker').val('#' + brushColorHex);
+					if (window.jQuery.spectrum) $('#colorPicker').spectrum({color: '#' + brushColorHex});
+				}
+				
 				updateRGB = true;
 				updateHSV = true;
 			}
@@ -486,7 +494,7 @@ var platform = {
 				// Initialise the new line
 				platform.drawLine.newLine = new Kinetic.Line({
 					points: platform.drawLine.points,
-					stroke: platform.brush.brushColorHex,
+					stroke: '#' + platform.brush.brushColorHex,
 					strokeWidth: platform.brush.brushSize,
 					lineCap: platform.brush.brushType,
 					lineJoin: platform.brush.brushType
@@ -1271,7 +1279,7 @@ var platform = {
 
 					// Create the use object
 					user = new User(data.options);
-
+					debugger;
 					// Connect to the other users in the session
 					for (var i in data.users) {
 						if (data.users[i].username !== user.username) {
@@ -1527,6 +1535,7 @@ var platform = {
 			$('#brushColorRed, #brushColorGreen, #brushColorBlue').on('change keyup', platform.brush.RGBToHex);
 
 			$('#brushColorHue, #brushColorSat, #brushColorVal').on('change keyup', platform.brush.HSVToRGB);
+			$('#colorPicker').on('change', platform.brush.changeBrushColorHex);
 
 			// Save to PNG button
 			$('#saveToPNG').on('click', platform.util.saveToPNG);
@@ -1794,6 +1803,8 @@ var platform = {
 		// Set the active layer
 		for (var first in platform.layers.globalLayers) break;
 		platform.activeLayer = platform.layers.globalLayers[first];
+
+		if (window.jQuery.spectrum) $('#colorPicker').spectrum({color: '#000'});
 
 		platform.util.addEventListeners();
 		platform.util.restrictToNumericInput();

@@ -9,6 +9,23 @@
 		<script src="./js/kinetic.js"></script>
 		<script src="./js/platform.js"></script>
 		<script src="./js/peer.js"></script>
+		<script src="./js/modernizr.js"></script>
+		<script>
+			Modernizr.load([
+				{
+					test : Modernizr.canvas && Modernizr.inputtypes.color,
+					nope : ['./js/polyfills/FlashCanvasPro/flashcanvas.js', './js/polyfills/spectrum.js', './js/polyfills/spectrum.css'],
+				},
+				{
+					test : Modernizr.websockets,
+					nope : ['./js/polyfills/nowebsockets.js']
+				},
+			]);
+			yepnope({
+				test: (typeof window.webkitRTCPeerConnection === "function" || typeof window.mozRTCPeerConnection === "function" || typeof window.RTCPeerConnection === "function"),
+				nope: ['./js/polyfills/nowebrtc.js']
+			});
+		</script>
 	</head>
 	<body>
 		<div class="container">
