@@ -2,3 +2,5 @@
 *.log
 
 .sublime-grunt.cache
+
+nohup.out

@@ -22,8 +22,8 @@ function User(options) {
 		conn.on('data', function(data) {
 			if (!data) { return; }
 
+			var layer;
 			if (typeof data.data !== 'undefined') {
-				var layer;
 				layer = platform.layers.getLayer(data.data.layerName, data.data.global);
 			}
 
@@ -50,6 +50,17 @@ function User(options) {
 				case 'LOCK_LAYER':
 					platform.layers.lockLayer(layer, true);
 					$('#' + data.data.layerName + ' .lockLayer').toggleClass('active');
+					break;
+				case 'UPDATE_HISTORIES':
+					platform.history.updateHistoriesAfterSessionAction(data.data);
+					break;
+				case 'UNDO_LAST_ACTION':
+					platform.history.updateHistoriesAfterSessionAction(data.data);
+					platform.history.undoLastAction(data.global, true, true);
+					break;
+				case 'REDO_LAST_ACTION':
+					platform.history.updateHistoriesAfterSessionAction(data.data);
+					platform.history.redoLastAction(data.global, true, true);
 					break;
 				default:
 					console.log(data);
@@ -555,7 +566,7 @@ var platform = {
 			platform.layers.updateLayerPreview(platform.activeLayer);
 			// add updated layer to history
 			if (addToHistory) {
-				platform.history.addToHistory(platform.activeLayer);
+				platform.history.addToHistory();
 			}
 			platform.session.sendLayerToAll(platform.activeLayer);
 		},
@@ -996,7 +1007,7 @@ var platform = {
 		 * Function to add an action to the histories.
 		 * Should be called whenever the canvas is modified
 		 */
-		addToHistory: function() {
+		addToHistory: function(noSend) {
 			var localLayers = {},
 				globalLayers = {},
 				userHistory = platform.history.userHistory,
@@ -1036,6 +1047,8 @@ var platform = {
 			// Empty the redo arrays as they have become obsolete
 			userRedo.splice(0);
 			globalRedo.splice(0);
+
+			if (!noSend) platform.session.sendGlobalHistoryAction();
 		},
 
 		/**
@@ -1046,7 +1059,7 @@ var platform = {
 		 * @param {boolean} global Undo a global action?
 		 * @return {boolean}
 		 */
-		undoLastAction: function(global) {
+		undoLastAction: function(global, securityOverride, noSend) {
 			var history = platform.history.userHistory,
 				redo = platform.history.userRedo,
 				otherHistory = platform.history.globalHistory,
@@ -1054,7 +1067,7 @@ var platform = {
 				stage = platform.stage;
 
 			try {
-				platform.util.isContributor(user);
+				if (!securityOverride) platform.util.isContributor(user);
 
 				if (global === true) {
 					platform.util.isSessionOwner(user);
@@ -1118,6 +1131,8 @@ var platform = {
 
 				// Redraw the canvas
 				stage.drawScene();
+
+				if (!noSend) platform.session.undoLastAction(global);
 			} catch (e) {
 				alert(e.message);
 			}
@@ -1131,14 +1146,14 @@ var platform = {
 		 * @param {boolean} global Redo a global action?
 		 * @return {boolean}
 		 */
-		redoLastAction: function(global) {
+		redoLastAction: function(global, securityOverride, noSend) {
 			var history = platform.history.userHistory,
 				redo = platform.history.userRedo,
 				otherHistory = platform.history.globalHistory,
 				otherRedo = platform.history.globalRedo,
 				stage = platform.stage;
 			try {
-				platform.util.isContributor(user);
+				if (!securityOverride) platform.util.isContributor(user);
 				if (global === true) {
 					platform.util.isSessionOwner(user);
 					history = platform.history.globalHistory;
@@ -1204,9 +1219,15 @@ var platform = {
 				// Redraw the scene
 				stage.drawScene();
 
+				if (!noSend) platform.session.redoLastAction(global);
+
 			} catch (exception) {
 				alert(exception.message);
 			}
+		},
+		updateHistoriesAfterSessionAction: function(data){
+			platform.history.globalHistory = data.globalHistory;
+			platform.history.globalRedo = data.globalRedo;
 		}
 	},
 
@@ -1279,7 +1300,7 @@ var platform = {
 
 					// Create the use object
 					user = new User(data.options);
-					debugger;
+
 					// Connect to the other users in the session
 					for (var i in data.users) {
 						if (data.users[i].username !== user.username) {
@@ -1412,6 +1433,50 @@ var platform = {
 				user.connections[i].send(toSend);
 			}
 		},
+
+		sendGlobalHistoryAction: function(){
+			var toSend = {
+				message: 'UPDATE_HISTORIES',
+				data: {
+					globalHistory: platform.history.globalHistory,
+					globalRedo: platform.history.globalRedo
+				}
+			};
+
+			for (var i in user.connections) {
+				user.connections[i].send(toSend);
+			}
+		},
+
+		undoLastAction: function(global){
+			var toSend = {
+				message: 'UNDO_LAST_ACTION',
+				data: {
+					global: global,
+					globalHistory: platform.history.globalHistory,
+					globalRedo: platform.history.globalRedo
+				}
+			};
+
+			for (var i in user.connections) {
+				user.connections[i].send(toSend);
+			}
+		},
+
+		redoLastAction: function(global){
+			var toSend = {
+				message: 'REDO_LAST_ACTION',
+				data: {
+					global: global,
+					globalHistory: platform.history.globalHistory,
+					globalRedo: platform.history.globalRedo
+				}
+			};
+
+			for (var i in user.connections) {
+				user.connections[i].send(toSend);
+			}
+		}
 	},
 
 	/**
@@ -1795,7 +1860,7 @@ var platform = {
 		}
 
 		// Add a history entry so there is always an initial state to go back to
-		platform.history.addToHistory();
+		platform.history.addToHistory(true);
 
 		platform.brush.changeBrushSize(3);
 		platform.brush.changeBrushColorHex('000000');
