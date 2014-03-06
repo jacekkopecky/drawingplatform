@@ -1,20 +1,30 @@
-Session = function(){
+Session = function() {
     this.active = true;
     this.users = [];
 };
 
-var express = require('express'),
+var MongoClient = require('mongodb').MongoClient,
+    MongoServer = require('mongodb').Server,
+    express = require('express'),
     fs = require('fs'),
     PeerServer = require('peer').PeerServer;
 
 var activeSessions = {}; // Object to contain active drawing sessions
+
+var DB, COLLECTION;
+var mongoClient = new MongoClient(new MongoServer('localhost', 27017));
+mongoClient.open(function(err, mongoClient) {
+    DB = mongoClient.db("drawingplatform");
+    COLLECTION = DB.collection('sessions');
+    console.log('MongoDB server listening on port 27017');
+});
 
 /**
  * Initialise a new session on the server
  * @param  {object} request  HTTP request object
  * @param  {object} response HTTP response object
  */
-function initSession(request, response){
+function initSession(request, response) {
     // Get the post data
     var postData = request.body;
     var username = postData.username;
@@ -25,34 +35,48 @@ function initSession(request, response){
     if (typeof activeSessions[sessionName] !== "undefined") {
         obj.error = 'Cannot create session, session name in use';
         response.status(500);
+
+        // Set the response headers and send
+        response.setHeader('Content-Type', 'text/json');
+        response.end(JSON.stringify(obj));
     } else {
         // Create a session
         var session = new Session();
-        
+
         var user = {
-                username: username, 
-                sessionName: sessionName,
-                securityProfile: 1,
-                securityProfileName: 'sessionOwner'
-            };
-        
+            username: username,
+            sessionName: sessionName,
+            securityProfile: 1,
+            securityProfileName: 'sessionOwner'
+        };
+
         // Add the user and store the session in activeSessions
         session.users.push(user);
         activeSessions[sessionName] = session;
-        
-        // Read the response body from the partail
-        var body = fs.readFileSync(__dirname + '/../public/sessionPartial.html').toString();
 
-        // Create an object to send as the response containing the HTML and user options
-        obj = {
-            body: body, 
-            options: user
-        };
+        COLLECTION.find({sessionName: sessionName}).toArray(function(err, result){
+            if (err) throw err;
+            if (result.length === 1) {
+                var platformData = result[0].platformData;
+            }
+            // Read the response body from the partail
+            var body = fs.readFileSync(__dirname + '/../public/sessionPartial.html').toString();
+
+            // Create an object to send as the response containing the HTML and user options
+            obj = {
+                body: body,
+                options: user,
+                platformData: platformData
+            };
+
+            // Set the response headers and send
+            response.setHeader('Content-Type', 'text/json');
+            response.end(JSON.stringify(obj));
+        });
+
+        
     }
 
-    // Set the response headers and send
-    response.setHeader('Content-Type', 'text/json');
-    response.end(JSON.stringify(obj));
 }
 
 /**
@@ -60,7 +84,7 @@ function initSession(request, response){
  * @param  {object} request  HTTP request object
  * @param  {object} response HTTP response object
  */
-function joinSession(request, response){
+function joinSession(request, response) {
     // Get the post data
     var postData = request.body;
     var username = postData.username;
@@ -75,7 +99,7 @@ function joinSession(request, response){
         // Check for a unique username
         if (isUsernameUnique(username, session)) {
             var user = {
-                username: username, 
+                username: username,
                 sessionName: sessionName,
                 securityProfile: 2,
                 securityProfileName: 'contributor'
@@ -86,10 +110,10 @@ function joinSession(request, response){
 
             // Read the html from the partial
             var body = fs.readFileSync(__dirname + '/../public/sessionPartial.html').toString();
-            
+
             // Create an object to send as the response containing the HTML and user options
             obj = {
-                body: body, 
+                body: body,
                 options: user,
                 users: session.users
             };
@@ -97,12 +121,12 @@ function joinSession(request, response){
             obj.error = "Could not connect to session, username in use";
             response.status(500);
         }
-        
+
     } else {
         obj.error = 'Could not connect to session, session not found';
         response.status(500);
     }
-    
+
     // Set the header(s) and send
     response.setHeader('Content-Type', 'text/json');
     response.end(JSON.stringify(obj));
@@ -113,7 +137,7 @@ function joinSession(request, response){
  * @param  {object} request  HTTP request object
  * @param  {object} response HTTP response object
  */
-function leaveSession(request, response){
+function leaveSession(request, response) {
     // Get the postdata
     var postData = request.body;
     var username = postData.user.username;
@@ -137,7 +161,7 @@ function leaveSession(request, response){
         }
 
         // If there are users still in the session
-        if (users.length && sessionOwners){
+        if (users.length && sessionOwners) {
             // Store the remaining users in the session object
             activeSessions[sessionName].users = users;
         } else {
@@ -149,7 +173,7 @@ function leaveSession(request, response){
             }
         }
     }
-    
+
     response.end("");
 }
 
@@ -158,11 +182,11 @@ function leaveSession(request, response){
  * Is called when there are no session owners left in the session
  * @param  {array} users Array of users to disconnect
  */
-disconnectUsers = function(users){
+disconnectUsers = function(users) {
     var clients = peerServer._clients.peerjs;
-    for (var i in users){
-        for (var j in clients){
-            if (clients[j] && j.split('_')[0] == users[i].sessionName){
+    for (var i in users) {
+        for (var j in clients) {
+            if (clients[j] && j.split('_')[0] == users[i].sessionName) {
                 var message = {
                     type: 'DISCONNECTED_FROM_SESSION'
                 };
@@ -173,7 +197,7 @@ disconnectUsers = function(users){
             }
         }
     }
-        
+
 };
 
 /**
@@ -182,7 +206,7 @@ disconnectUsers = function(users){
  * @param  {Session}  session  The session to check
  * @return {Boolean}
  */
-isUsernameUnique = function(username, session){
+isUsernameUnique = function(username, session) {
     for (var i in session.users) {
         if (session.users[i].username.toLowerCase() == username.toLowerCase()) {
             return false;
@@ -191,7 +215,7 @@ isUsernameUnique = function(username, session){
     return true;
 };
 
-checkSessionOwners = function(request, response){
+checkSessionOwners = function(request, response) {
     var postData = request.body;
     var sessionName = postData.sessionName;
     var username = postData.username;
@@ -207,7 +231,30 @@ checkSessionOwners = function(request, response){
 
     // Set the header(s) and send
     response.setHeader('Content-Type', 'text/json');
-    response.end(JSON.stringify({count: ownerCount}));
+    response.end(JSON.stringify({
+        count: ownerCount
+    }));
+};
+
+saveToDatabase = function(request, response) {
+    // Select the collection
+    var postData = request.body;
+    var sessionName = postData.sessionName;
+    var platformData = postData.platformData;
+
+    COLLECTION.update({
+            sessionName: sessionName
+        }, {
+            sessionName: sessionName,
+            platformData: platformData
+        }, {
+            upsert: true
+        },
+        function(err, result) {
+            if (err) console.log(err);
+        }
+    );
+    response.end();
 };
 
 // Server initialisation and routing setup
@@ -215,52 +262,58 @@ var app = express();
 app.use(express.static(__dirname + '/../public'));
 app.use(express.bodyParser());
 
-app.get('/', function(request, response){
+app.get('/', function(request, response) {
     response.setHeader('Content-Type', 'text/html');
     var body = fs.readFileSync(__dirname + '/../public/index.html');
     response.end(body);
 });
 
-app.get('/error_log', function(request, response){
+app.get('/error_log', function(request, response) {
     response.setHeader('Content-Type', 'text/plain');
     var body = fs.readFileSync(__dirname + '/logs/error.log');
     response.end(body);
 });
 
-app.get('/server_log', function(request, response){
+app.get('/server_log', function(request, response) {
     response.setHeader('Content-Type', 'text/plain');
     var body = fs.readFileSync(__dirname + '/logs/out.log');
     response.end(body);
 });
 
-app.post('/initSession', function(request, response){
+app.post('/initSession', function(request, response) {
     initSession(request, response);
 });
 
-app.post('/joinSession', function(request, response){
+app.post('/joinSession', function(request, response) {
     joinSession(request, response);
 });
 
-app.post('/leaveSession', function(request, response){
+app.post('/leaveSession', function(request, response) {
     leaveSession(request, response);
 });
 
-app.post('/checkSessionOwners', function(request, response){
+app.post('/checkSessionOwners', function(request, response) {
     checkSessionOwners(request, response);
+});
+
+app.post('/saveToDb', function(request, response) {
+    saveToDatabase(request, response);
 });
 
 app.listen(8000);
 console.log('Server listening on port 8000');
 
 // Peerjs server initialisation and connection management
-var peerServer = new PeerServer({port: 9000});
+var peerServer = new PeerServer({
+    port: 9000
+});
 console.log('Peer server listening on port 9000');
 
 /**
  * Event handler for new peer connections
  * @param  {String} id The id of the new peer
  */
-peerServer.on('connection', function(id){
+peerServer.on('connection', function(id) {
     // Parse out the session id
     var sessionID = id.split('_');
     sessionID = sessionID[0];
@@ -269,8 +322,8 @@ peerServer.on('connection', function(id){
     var clients = this._clients.peerjs;
 
     // For peers in the same session send a CONNECT_TO_PEER message with the ID of the new peer
-    for (var i in clients){
-        if (clients[i] && i.split('_')[0] == sessionID && i != id){
+    for (var i in clients) {
+        if (clients[i] && i.split('_')[0] == sessionID && i != id) {
             var message = {
                 type: 'CONNECT_TO_PEER',
                 peerID: id
@@ -284,7 +337,7 @@ peerServer.on('connection', function(id){
  * Event handler for peer disconnections
  * @param  {String} id The id of the disconnected peer
  */
-peerServer.on('disconnect', function(id){
+peerServer.on('disconnect', function(id) {
     // Parse out the session ID
     var sessionID = id.split('_');
     sessionID = sessionID[0];
@@ -293,8 +346,8 @@ peerServer.on('disconnect', function(id){
     var clients = this._clients.peerjs;
 
     // For peers in the same session send a DISCONNECT_PEER message with the ID of the disconnected peer
-    for (var i in clients){
-        if (clients[i] && i.split('_')[0] == sessionID && i != id){
+    for (var i in clients) {
+        if (clients[i] && i.split('_')[0] == sessionID && i != id) {
             var message = {
                 type: 'DISCONNECT_PEER',
                 peerID: id

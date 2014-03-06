@@ -1261,11 +1261,22 @@ var platform = {
 					// Replace the body with the drawing platform
 					$('body').html(data.body);
 
+					if (data.platformData) {
+						if (!data.platformData.localLayers) data.platformData.localLayers = {};
+						if (!data.platformData.globalLayers) data.platformData.globalLayers = {};
+						if (!data.platformData.globalHistory) data.platformData.globalHistory = [];
+						if (!data.platformData.globalRedo) data.platformData.globalRedo = [];
+						platform.gotPlatformData = data.platformData;
+					}
+
 					// Create the use object
 					user = new User(data.options);
 
 					// Initialise the drawing platform
 					platform.init();
+					platform.dbIntervalTimer = setInterval(function(){
+						platform.session.sendEverything('DATABASE');
+					}, 30000);
 				},
 				error: function(jqXHR) {
 					platform.util.alert(jqXHR.responseJSON.error);
@@ -1330,6 +1341,7 @@ var platform = {
 		 * Client side tear down of a session
 		 */
 		leaveSession: function() {
+			platform.session.sendEverything("DATABASE");
 			$.ajax({
 				url: '/leaveSession',
 				data: {
@@ -1385,6 +1397,18 @@ var platform = {
 					globalRedo: platform.history.globalRedo
 				}
 			};
+
+			if (connectionID === 'DATABASE'){
+				$.ajax({
+					url: '/saveToDb',
+					method: 'POST',
+					data: {
+						sessionName: user.sessionName, 
+						platformData: toSend.data
+					}
+				});
+				return;
+			}
 
 			if (user.connections[connectionID].open) {
 				clearInterval(user.setIntervalTimer);
@@ -1605,6 +1629,9 @@ var platform = {
 			// Save to PNG button
 			$('#saveToPNG').on('click', platform.util.saveToPNG);
 
+			// Save to PNG button
+			$('#saveToDB').on('click', platform.util.manualSaveToDb);
+
 			// New layer button
 			$('#newLayerButton').on('click', platform.layers.addLayer);
 
@@ -1714,6 +1741,15 @@ var platform = {
 					window.open(dataUrl);
 				}
 			});
+		},
+
+		manualSaveToDb: function(){
+			try{
+				platform.util.isContributor(user);
+				platform.session.sendEverything("DATABASE");
+			} catch (e){
+				alert(e.message);
+			}
 		},
 
 		/**
