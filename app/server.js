@@ -1,8 +1,34 @@
+// Session class
 Session = function() {
     this.active = true;
-    this.users = [];
+    this.users = {};
+    this.bannedUsers = {};
+    this.bootedUsers = {};
 };
 
+// User class
+User = function(options){
+    if (!options){
+        options = {
+            username: '',
+            sessionName: '',
+            securityProfile: 3,
+            securityProfileName: '',
+            active: false,
+            userAgent: '',
+            ipAddress: ''
+        };
+    }
+    this.username = options.username;
+    this.sessionName = options.sessionName;
+    this.securityProfile = options.securityProfile;
+    this.securityProfileName = options.securityProfileName;
+    this.active = options.active;
+    this.userAgent = options.userAgent;
+    this.ipAddress = options.ipAddress;
+};
+
+// Required node modules
 var MongoClient = require('mongodb').MongoClient,
     MongoServer = require('mongodb').Server,
     express = require('express'),
@@ -11,6 +37,7 @@ var MongoClient = require('mongodb').MongoClient,
 
 var activeSessions = {}; // Object to contain active drawing sessions
 
+// Create the database connection
 var DB, COLLECTION;
 var mongoClient = new MongoClient(new MongoServer('localhost', 27017));
 mongoClient.open(function(err, mongoClient) {
@@ -24,7 +51,7 @@ mongoClient.open(function(err, mongoClient) {
  * @param  {object} request  HTTP request object
  * @param  {object} response HTTP response object
  */
-function initSession(request, response) {
+initSession = function(request, response) {
     // Get the post data
     var postData = request.body;
     var username = postData.username;
@@ -43,21 +70,28 @@ function initSession(request, response) {
         // Create a session
         var session = new Session();
 
-        var user = {
+        var user = new User({
             username: username,
             sessionName: sessionName,
             securityProfile: 1,
-            securityProfileName: 'sessionOwner'
-        };
+            securityProfileName: 'sessionOwner',
+            active: true,
+            userAgent: request.headers['user-agent'],
+            ipAddress: request.ip
+        });
 
         // Add the user and store the session in activeSessions
-        session.users.push(user);
+        session.users[username] = user;
         activeSessions[sessionName] = session;
 
-        COLLECTION.find({sessionName: sessionName}).toArray(function(err, result){
+        // Look for an existing drawing platform
+        COLLECTION.find({
+            sessionName: sessionName
+        }).toArray(function(err, result) {
             if (err) throw err;
+            var platformData = [];
             if (result.length === 1) {
-                var platformData = result[0].platformData;
+                platformData = result[0].platformData;
             }
             // Read the response body from the partail
             var body = fs.readFileSync(__dirname + '/../public/sessionPartial.html').toString();
@@ -73,22 +107,21 @@ function initSession(request, response) {
             response.setHeader('Content-Type', 'text/json');
             response.end(JSON.stringify(obj));
         });
-
-        
     }
-
-}
+};
 
 /**
  * Join an existing session on the server
  * @param  {object} request  HTTP request object
  * @param  {object} response HTTP response object
  */
-function joinSession(request, response) {
+joinSession = function(request, response) {
     // Get the post data
     var postData = request.body;
     var username = postData.username;
     var sessionName = postData.sessionName;
+    var userAgent = request.headers['user-agent'];
+    var ipAddress = request.ip;
     var obj = {};
 
     // Get the session in question
@@ -96,17 +129,25 @@ function joinSession(request, response) {
 
     // Make sure the session exists
     if (typeof session !== 'undefined') {
-        // Check for a unique username
-        if (isUsernameUnique(username, session)) {
-            var user = {
+        // Check for a unique username, booted or banned user
+        var banned = isBanned(username, sessionName, userAgent, ipAddress);
+        var booted = isBooted(username, sessionName, userAgent, ipAddress);
+        var unique = isUsernameUnique(username, session);
+        if (!banned && !booted &&
+            unique) {
+            var user = new User({
                 username: username,
                 sessionName: sessionName,
                 securityProfile: 2,
-                securityProfileName: 'contributor'
-            };
+                securityProfileName: 'contributor',
+                active: true,
+                userAgent: userAgent,
+                ipAddress: ipAddress
+            });
 
             // Add the user to the session
-            session.users.push(user);
+            session.users[username] = user;
+            activeSessions[sessionName] = session;
 
             // Read the html from the partial
             var body = fs.readFileSync(__dirname + '/../public/sessionPartial.html').toString();
@@ -117,8 +158,14 @@ function joinSession(request, response) {
                 options: user,
                 users: session.users
             };
-        } else {
+        } else if (!unique) {
             obj.error = "Could not connect to session, username in use";
+            response.status(500);
+        } else if (booted) {
+            obj.error = "You have been booted from the session, please try again later";
+            response.status(500);
+        } else if (banned) {
+            obj.error = "You have been banned from the session, please go away";
             response.status(500);
         }
 
@@ -130,14 +177,14 @@ function joinSession(request, response) {
     // Set the header(s) and send
     response.setHeader('Content-Type', 'text/json');
     response.end(JSON.stringify(obj));
-}
+};
 
 /**
  * Remove a user from a session on the server
  * @param  {object} request  HTTP request object
  * @param  {object} response HTTP response object
  */
-function leaveSession(request, response) {
+leaveSession = function(request, response) {
     // Get the postdata
     var postData = request.body;
     var username = postData.user.username;
@@ -149,33 +196,26 @@ function leaveSession(request, response) {
 
     if (typeof session !== 'undefined') {
         // Create an empty users array
-        var users = [];
+        // var users = [];
 
         // Iterate through the session users to remove the user that is leaving
         for (var i in session.users) {
-
-            if (session.users[i].username != username) {
-                users.push(session.users[i]);
-                if (session.users[i].securityProfile == 1) sessionOwners++;
+            if (session.users[i].securityProfile == 1) sessionOwners++;
+            if (session.users[i].username == username) {
+                session.users[i].active = false;
+                if (session.users[i].securityProfile == 1) sessionOwners--;
             }
         }
 
-        // If there are users still in the session
-        if (users.length && sessionOwners) {
-            // Store the remaining users in the session object
-            activeSessions[sessionName].users = users;
-        } else {
-            // If not delete the session from the active sessions object
+        // If there are no active session owners left delete the active session and disconnect other users
+        if (!sessionOwners) {
+            disconnectUsers(session.users);
             delete activeSessions[sessionName];
-
-            if (!sessionOwners) {
-                disconnectUsers(users);
-            }
         }
     }
 
     response.end("");
-}
+};
 
 /**
  * Disconnects a set of users
@@ -184,11 +224,12 @@ function leaveSession(request, response) {
  */
 disconnectUsers = function(users) {
     var clients = peerServer._clients.peerjs;
+
     for (var i in users) {
         for (var j in clients) {
             if (clients[j] && j.split('_')[0] == users[i].sessionName) {
                 var message = {
-                    type: 'DISCONNECTED_FROM_SESSION'
+                    type: "DISCONNECTED_FROM_SESSION"
                 };
                 clients[j].socket.send(JSON.stringify(message));
                 // Client-to-user == one-to-one so remove the disconnecting client to prevent
@@ -201,6 +242,43 @@ disconnectUsers = function(users) {
 };
 
 /**
+ * Disconnect a single user, this is usually when the user has been booted or banned
+ * @param  {User} user          The user to disconnect
+ * @param  {String} messageType The type of disconnect message to send
+ */
+disconnectUser = function(user, messageType) {
+    var clients = peerServer._clients.peerjs;
+    
+    switch (messageType) {
+        case 'ban':
+            messageType = "BANNED_FROM_SESSION";
+            break;
+        case 'boot':
+            messageType = "BOOTED_FROM_SESSION";
+            break;
+        case 'disconnect':
+            messageType = "DISCONNECTED_FROM_SESSION";
+            break;
+        default:
+            messageType = "DISCONNECTED_FROM_SESSION";
+            break;
+    }
+
+    // Find the relevant peerserver client and send the disconnect message
+    for (var i in clients) {
+        if (clients[i] && i == user.sessionName + '_' + user.username) {
+            var message = {
+                type: messageType
+            };
+            clients[i].socket.send(JSON.stringify(message));
+            // Client-to-user == one-to-one so remove the disconnecting client to prevent
+            // receival of multiple disconnection messages
+            clients[i] = null;
+        }
+    }
+};
+
+/**
  * Checks to see if a username already exists in a given session
  * @param  {String}   username The username being checked
  * @param  {Session}  session  The session to check
@@ -208,13 +286,161 @@ disconnectUsers = function(users) {
  */
 isUsernameUnique = function(username, session) {
     for (var i in session.users) {
-        if (session.users[i].username.toLowerCase() == username.toLowerCase()) {
+        if (session.users[i].username.toLowerCase() == username.toLowerCase() &&
+            session.users[i].active) {
             return false;
         }
     }
     return true;
 };
 
+/**
+ * Checks to see if a user has been booted from the session
+ * @param  {String}  username    Username to check
+ * @param  {String}  sessionName Session name to check against
+ * @param  {String}  userAgent   User agent of user being checked
+ * @param  {String}  ipAddress   IP Address of user being checked
+ * @return {Boolean}
+ */
+isBooted = function(username, sessionName, userAgent, ipAddress) {
+    var session = activeSessions[sessionName];
+    var bootedUsers = session.bootedUsers;
+    for (var i in bootedUsers) {
+        if (bootedUsers[i].username == username &&
+            bootedUsers[i].userAgent == userAgent &&
+            bootedUsers[i].ipAddress == ipAddress) {
+            return true;
+        }
+    }
+    return false;
+};
+
+/**
+ * Checks to see if a user has been banned from the session
+ * @param  {String}  username    Username to check
+ * @param  {String}  sessionName Session name to check against
+ * @param  {String}  userAgent   User agent of user being checked
+ * @param  {String}  ipAddress   IP Address of user being checked
+ * @return {Boolean}
+ */
+isBanned = function(username, sessionName, userAgent, ipAddress) {
+    var session = activeSessions[sessionName];
+    var bannedUsers = session.bannedUsers;
+    for (var i in bannedUsers) {
+        if (bannedUsers[i].username == username &&
+            bannedUsers[i].userAgent == userAgent &&
+            bannedUsers[i].ipAddress == ipAddress) {
+            return true;
+        }
+    }
+    return false;
+};
+
+/**
+ * Bans a user from the session they are currently connected to and
+ * disconnects them
+ * @param  {object} request  HTTP request object
+ * @param  {object} response HTTP response object
+ */
+banUser = function(request, response) {
+    var postData = request.body;
+    var username = postData.username;
+    var sessionName = postData.sessionName;
+
+    var session = activeSessions[sessionName];
+    var userToBan;
+    for (var i in session.users) {
+        if (session.users[i].username == username) {
+            userToBan = session.users[i];
+            delete session.users[i];
+            break;
+        }
+    }
+
+    // Add the banned user to the list of banned users and disconnect
+    session.bannedUsers[username] = userToBan;
+    disconnectUser(userToBan, 'ban');
+
+    response.setHeader('Content-Type', 'text/json');
+    response.end(username + ' was banned');
+};
+
+/**
+ * Boots a user from the session they are currently connected to and
+ * disconnects them. Booted users can rejoin the session after a ten minute
+ * cooldown.
+ * @param  {object} request  HTTP request object
+ * @param  {object} response HTTP response object
+ */
+bootUser = function(request, response) {
+    var postData = request.body;
+    var username = postData.username;
+    var sessionName = postData.sessionName;
+
+    var session = activeSessions[sessionName];
+    var userToBoot;
+    for (var i in session.users) {
+        if (session.users[i].username == username) {
+            userToBoot = session.users[i];
+            delete session.users[i];
+            break;
+        }
+    }
+
+    // Add the booted user to the list of booted users and disconnect
+    session.bootedUsers[username] = userToBoot;
+    disconnectUser(userToBoot, 'boot');
+
+    // Remove the user from the booted user list after ten minutes
+    setTimeout(function() {
+        unbootUser(userToBoot);
+    }, 60000);
+
+    response.setHeader('Content-Type', 'text/json');
+    response.end(username + ' was booted');
+};
+
+/**
+ * Revokes a ban against a given user
+ * @param  {User} user The user to unban
+ */
+unbanUser = function(user) {
+    if (!activeSessions[user.sessionName]) {
+        return;
+    }
+
+    var session = activeSessions[user.sessionName];
+    var bannedUsers = session.bannedUsers;
+    for (var i in bannedUsers) {
+        if (bannedUsers[i] == user) {
+            delete bannedUsers[i];
+        }
+    }
+};
+
+/**
+ * Revokes a boot against a given user
+ * @param  {User} user The user to unboot
+ */
+unbootUser = function(user) {
+    if (!activeSessions[user.sessionName]) {
+        return;
+    }
+
+    var session = activeSessions[user.sessionName];
+    var bootedUsers = session.bootedUsers;
+    for (var i in bootedUsers) {
+        if (bootedUsers[i] == user) {
+            delete bootedUsers[i];
+        }
+    }
+};
+
+/**
+ * Function to count the number of session owners left in a session
+ * @param  {object} request  HTTP request object
+ * @param  {object} response HTTP response object
+ */
 checkSessionOwners = function(request, response) {
     var postData = request.body;
     var sessionName = postData.sessionName;
@@ -224,7 +450,9 @@ checkSessionOwners = function(request, response) {
     var ownerCount = 0;
 
     for (var i in session.users) {
-        if (session.users[i].username !== username && session.users[i].securityProfile == 1) {
+        if (session.users[i].username !== username &&
+            session.users[i].securityProfile == 1 &&
+            session.users[i].active) {
             ownerCount++;
         }
     }
@@ -236,8 +464,12 @@ checkSessionOwners = function(request, response) {
     }));
 };
 
+/**
+ * Saves a drawing platform instance to the database
+ * @param  {object} request  HTTP request object
+ * @param  {object} response HTTP response object
+ */
 saveToDatabase = function(request, response) {
-    // Select the collection
     var postData = request.body;
     var sessionName = postData.sessionName;
     var platformData = postData.platformData;
@@ -298,6 +530,14 @@ app.post('/checkSessionOwners', function(request, response) {
 
 app.post('/saveToDb', function(request, response) {
     saveToDatabase(request, response);
+});
+
+app.post('/bootUser', function(request, response) {
+    bootUser(request, response);
+});
+
+app.post('/banUser', function(request, response) {
+    banUser(request, response);
 });
 
 app.listen(8000);

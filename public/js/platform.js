@@ -20,7 +20,9 @@ function User(options) {
 
 	this.peer.on('connection', function(conn) {
 		conn.on('data', function(data) {
-			if (!data) { return; }
+			if (!data) {
+				return;
+			}
 
 			var layer;
 			if (typeof data.data !== 'undefined') {
@@ -62,6 +64,9 @@ function User(options) {
 					platform.history.updateHistoriesAfterSessionAction(data.data);
 					platform.history.redoLastAction(data.global, true, true);
 					break;
+				case 'REMOVE_CONNECTION':
+					user.removeConnection(data.username);
+					break;
 				default:
 					console.log(data);
 					break;
@@ -78,6 +83,7 @@ function User(options) {
 	this.connectToPeer = function(peerID) {
 		this.connections[peerID] = this.peer.connect(peerID);
 	};
+
 	/**
 	 * Function to disconnect from a peer
 	 * @param  {String} peerID The id of the peer to disconnect
@@ -90,14 +96,45 @@ function User(options) {
 			}
 		}
 	};
-	this.disconnectedFromSession = function() {
-		alert('Session closed by server');
+
+	/**
+	 * Function which is called when the user is disconnected from the
+	 * session by the server
+	 * @param  {String} disconnectType The type of disconnect that occurred
+	 */
+	this.disconnectedFromSession = function(disconnectType) {
+		// Select and alert the correct disconnect message
+		var message = 'Session closed by server';
+		if (disconnectType === 'ban') {
+			message = 'You have been banned from the session, please go away!';
+		} else if (disconnectType === 'boot') {
+			message = 'You have been booted from the session, please calm down and try again later';
+		}
+		alert(message);
+
+		// Destroy all peer connections
 		this.peer.destroy();
 		for (var i in this.connections) {
 			this.connections[i].close();
 		}
 		this.connections = {};
+
+		// Disable the drawing platform
 		platform.uninit();
+
+		// If banned or booted redirect to the login screen
+		if (disconnectType) {
+			window.location = '/';
+		}
+	};
+
+	/**
+	 * Function to remove a peer connection
+	 * @param  {String} username Username of peer
+	 */
+	this.removeConnection = function(username) {
+		this.connections[this.sessionName + '_' + username].close();
+		delete this.connections[this.sessionName + '_' + username];
 	};
 }
 
@@ -163,9 +200,11 @@ var platform = {
 				} else {
 					brushColorHex = brushColorHex.currentTarget.value;
 					$('#colorPicker').val('#' + brushColorHex);
-					if (window.jQuery.spectrum) $('#colorPicker').spectrum({color: '#' + brushColorHex});
+					if (window.jQuery.spectrum) $('#colorPicker').spectrum({
+						color: '#' + brushColorHex
+					});
 				}
-				
+
 				updateRGB = true;
 				updateHSV = true;
 			}
@@ -711,7 +750,7 @@ var platform = {
 						platform.util.isLayerOwner(layer, user);
 					}
 				}
-					
+
 				if (layer.getAttr('locked')) {
 					layer.setAttr('locked', false);
 				} else {
@@ -786,7 +825,7 @@ var platform = {
 					this.localLayers[layerName].destroy();
 					delete this.localLayers[layerName];
 				}
-				
+
 				if (!ignoreSend) platform.session.sendLayerToDelete(layerName, global);
 				platform.history.addToHistory();
 				return true;
@@ -1225,7 +1264,7 @@ var platform = {
 				alert(exception.message);
 			}
 		},
-		updateHistoriesAfterSessionAction: function(data){
+		updateHistoriesAfterSessionAction: function(data) {
 			platform.history.globalHistory = data.globalHistory;
 			platform.history.globalRedo = data.globalRedo;
 		}
@@ -1274,7 +1313,7 @@ var platform = {
 
 					// Initialise the drawing platform
 					platform.init();
-					platform.dbIntervalTimer = setInterval(function(){
+					platform.dbIntervalTimer = setInterval(function() {
 						platform.session.sendEverything('DATABASE');
 					}, 30000);
 				},
@@ -1291,7 +1330,7 @@ var platform = {
 		joinSession: function() {
 			var username = $('#username').val();
 			var sessionName = $('#sessionName').val();
-			
+
 			if (username === "" || sessionName === "") {
 				platform.util.alert("Please enter a username and session name");
 				return;
@@ -1398,12 +1437,12 @@ var platform = {
 				}
 			};
 
-			if (connectionID === 'DATABASE'){
+			if (connectionID === 'DATABASE') {
 				$.ajax({
 					url: '/saveToDb',
 					method: 'POST',
 					data: {
-						sessionName: user.sessionName, 
+						sessionName: user.sessionName,
 						platformData: toSend.data
 					}
 				});
@@ -1458,7 +1497,7 @@ var platform = {
 			}
 		},
 
-		sendGlobalHistoryAction: function(){
+		sendGlobalHistoryAction: function() {
 			var toSend = {
 				message: 'UPDATE_HISTORIES',
 				data: {
@@ -1472,7 +1511,7 @@ var platform = {
 			}
 		},
 
-		undoLastAction: function(global){
+		undoLastAction: function(global) {
 			var toSend = {
 				message: 'UNDO_LAST_ACTION',
 				data: {
@@ -1487,7 +1526,7 @@ var platform = {
 			}
 		},
 
-		redoLastAction: function(global){
+		redoLastAction: function(global) {
 			var toSend = {
 				message: 'REDO_LAST_ACTION',
 				data: {
@@ -1499,6 +1538,73 @@ var platform = {
 
 			for (var i in user.connections) {
 				user.connections[i].send(toSend);
+			}
+		},
+
+		/**
+		 * Bans a user from the current session
+		 * @param  {String} username
+		 */
+		banUser: function(username) {
+			try {
+				platform.util.isSessionOwner(user);
+				$.ajax({
+					url: '/banUser',
+					method: 'post',
+					dataType: 'json',
+					data: {
+						username: username,
+						sessionName: user.sessionName
+					}
+				});
+				user.removeConnection(username);
+
+				var toSend = {
+					message: 'REMOVE_CONNECTION',
+					data: {
+						username: username
+					}
+				};
+
+				for (var i in user.connections) {
+					user.connections[i].send(toSend);
+				}
+			} catch (e) {
+				alert(e.message);
+			}
+		},
+
+		/**
+		 * Boots a user from the current session
+		 * @param  {String} username
+		 */
+		bootUser: function(username) {
+			try {
+				platform.util.isSessionOwner(user);
+				$.ajax({
+					url: '/bootUser',
+					method: 'post',
+					dataType: 'json',
+					data: {
+						username: username,
+						sessionName: user.sessionName
+					}
+				});
+				user.removeConnection(username);
+
+				var toSend = {
+					message: 'REMOVE_CONNECTION',
+					data: {
+						username: username
+					}
+				};
+
+				for (var i in user.connections) {
+					user.connections[i].send(toSend);
+				}
+			} catch (e){
+				console.error(e);
+				alert(e.message);
 			}
 		}
 	},
@@ -1743,11 +1849,11 @@ var platform = {
 			});
 		},
 
-		manualSaveToDb: function(){
-			try{
+		manualSaveToDb: function() {
+			try {
 				platform.util.isContributor(user);
 				platform.session.sendEverything("DATABASE");
-			} catch (e){
+			} catch (e) {
 				alert(e.message);
 			}
 		},
@@ -1837,7 +1943,7 @@ var platform = {
 			$('.lockLayer').prop('disabled', true);
 			$('.deleteLayer').prop('disabled', true);
 		},
-		alert: function(message){
+		alert: function(message) {
 			if (!this._WARNING_CONTAINER.length) {
 				this._WARNING_CONTAINER = $('#warningContainer');
 			}
@@ -1905,7 +2011,9 @@ var platform = {
 		for (var first in platform.layers.globalLayers) break;
 		platform.activeLayer = platform.layers.globalLayers[first];
 
-		if (window.jQuery.spectrum) $('#colorPicker').spectrum({color: '#000'});
+		if (window.jQuery.spectrum) $('#colorPicker').spectrum({
+			color: '#000'
+		});
 
 		platform.util.addEventListeners();
 		platform.util.restrictToNumericInput();
