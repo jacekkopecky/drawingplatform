@@ -26,10 +26,20 @@ module.exports = function(grunt) {
                     vendor: [
                         'public/js/jquery.js',
                         'test/jasmine-jquery.js',
-                        'public/js/bootstrap.min.js', 
-                        'public/js/kinetic.js', 
+                        'public/js/bootstrap.min.js',
+                        'public/js/kinetic.js',
                         'public/js/peer.js'
                     ],
+                }
+            }
+        },
+        less: {
+            default: {
+                options: {
+                    paths: ["public/less"]
+                },
+                files: {
+                    "public/css/site.css": "public/less/bootstrap.less"
                 }
             }
         },
@@ -39,8 +49,8 @@ module.exports = function(grunt) {
                 tasks: ['jshint', 'forever:server:stop', 'forever:server:start']
             },
             client: {
-                files: ['public/js/platform.js'],
-                tasks: ['jasmine:client', 'jshint']
+                files: ['public/js/platform.js', 'public/less/custom.less'],
+                tasks: ['jasmine:client', 'jshint', 'less']
             }
         }
     });
@@ -49,9 +59,10 @@ module.exports = function(grunt) {
     grunt.loadNpmTasks('grunt-contrib-jshint');
     grunt.loadNpmTasks('grunt-contrib-jasmine');
     grunt.loadNpmTasks('grunt-forever');
+    grunt.loadNpmTasks('grunt-contrib-less');
     grunt.loadNpmTasks('grunt-contrib-watch');
 
     // Default task(s).
-    grunt.registerTask('default', ['jasmine', 'jshint', 'forever:server:start', 'watch']);
+    grunt.registerTask('default', ['jasmine', 'jshint', 'less', 'forever:server:start', 'watch']);
 
 };

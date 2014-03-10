@@ -1575,7 +1575,7 @@ Peer.prototype._handleMessage = function(message) {
       }
       break;
     case 'CONNECT_TO_PEER':
-      user.connectToPeer(message.peerID);
+      user.connectToPeer(message.peerID, message.securityProfile);
       break;
     case 'DISCONNECT_PEER':
       user.disconnectPeer(message.peerID);

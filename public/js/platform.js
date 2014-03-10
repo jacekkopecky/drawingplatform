@@ -65,7 +65,8 @@ function User(options) {
 					platform.history.redoLastAction(data.global, true, true);
 					break;
 				case 'REMOVE_CONNECTION':
-					user.removeConnection(data.username);
+					user.removeConnection(data.data.username);
+					$('#' + user.sessionName + '_' + data.data.username + 'Row').remove();
 					break;
 				default:
 					console.log(data);
@@ -80,8 +81,9 @@ function User(options) {
 	 *
 	 * @param  {String} peerID The id of the peer to connect to
 	 */
-	this.connectToPeer = function(peerID) {
+	this.connectToPeer = function(peerID, securityProfile) {
 		this.connections[peerID] = this.peer.connect(peerID);
+		platform.util.addUserToUserList(peerID, securityProfile);
 	};
 
 	/**
@@ -1354,7 +1356,7 @@ var platform = {
 					// Connect to the other users in the session
 					for (var i in data.users) {
 						if (data.users[i].username !== user.username) {
-							user.connectToPeer(data.options.sessionName + '_' + data.users[i].username);
+							user.connectToPeer(data.options.sessionName + '_' + data.users[i].username, data.users[i].securityProfile);
 						}
 					}
 
@@ -1545,7 +1547,7 @@ var platform = {
 		 * Bans a user from the current session
 		 * @param  {String} username
 		 */
-		banUser: function(username) {
+		banUser: function(username, userListRow) {
 			try {
 				platform.util.isSessionOwner(user);
 				$.ajax({
@@ -1569,6 +1571,15 @@ var platform = {
 				for (var i in user.connections) {
 					user.connections[i].send(toSend);
 				}
+
+				if (userListRow) {
+					var rows = userListRow.parent().children().length;
+					userListRow.slideUp().remove();
+					if (rows === 1) {
+						$('#userList .close').click();
+					}
+				}
+
 			} catch (e) {
 				alert(e.message);
 			}
@@ -1578,7 +1589,7 @@ var platform = {
 		 * Boots a user from the current session
 		 * @param  {String} username
 		 */
-		bootUser: function(username) {
+		bootUser: function(username, userListRow) {
 			try {
 				platform.util.isSessionOwner(user);
 				$.ajax({
@@ -1590,6 +1601,7 @@ var platform = {
 						sessionName: user.sessionName
 					}
 				});
+
 				user.removeConnection(username);
 
 				var toSend = {
@@ -1602,7 +1614,16 @@ var platform = {
 				for (var i in user.connections) {
 					user.connections[i].send(toSend);
 				}
-			} catch (e){
+
+				if (userListRow) {
+					var rows = userListRow.parent().children().length;
+					userListRow.slideUp().remove();
+					if (rows === 1) {
+						$('#userList .close').click();
+					}
+				}
+
+			} catch (e) {
 				console.error(e);
 				alert(e.message);
 			}
@@ -1616,6 +1637,7 @@ var platform = {
 	util: {
 		_ALERT: '<div class="alert alert-danger alert-dismissable"><button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button><strong>Error!</strong> ERROR_TEXT</div>',
 		_WARNING_CONTAINER: $('#warningContainer'),
+		_USER_TABLE_ROW: '<tr id="PEERID"><td><input type="text" class="form-control" disabled /></td><td><select class="form-control"><option value="1">Session owner</option><option value="2">Contributor</option><option value="3">Watcher</option></select></td><td><button type="button" class="btn btn-warning form-control">Boot user</button></td><td><button type="button" class="btn btn-danger form-control">Ban user</button></td></tr>',
 		/**
 		 * Function to get the mouse position when entering the stage as KineticJS doesn't
 		 * detect the position onmouseenter
@@ -1819,6 +1841,23 @@ var platform = {
 						previewDiv.remove();
 					}
 				}
+			});
+		},
+
+		addUserToUserList: function(peerID, securityProfile){
+			// debugger;
+			var username = peerID.split('_')[1];
+			$('#userListBody').append(this._USER_TABLE_ROW.replace('PEERID', peerID + 'Row'));
+			var userListRow = $('#' + peerID + 'Row');
+			userListRow.find('input').val(username);
+			userListRow.find('select').val(securityProfile).on('change', function(){
+				// session.changeUserSecurityProfile(user.username, $(this).val());
+			});
+			userListRow.find('.btn-warning').on('click', function(){
+				platform.session.bootUser(username, userListRow);
+			});
+			userListRow.find('.btn-danger').on('click', function(){
+				platform.session.banUser(username, userListRow);
 			});
 		},
 

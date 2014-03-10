@@ -566,7 +566,8 @@ peerServer.on('connection', function(id) {
         if (clients[i] && i.split('_')[0] == sessionID && i != id) {
             var message = {
                 type: 'CONNECT_TO_PEER',
-                peerID: id
+                peerID: id,
+                securityProfile: activeSessions[sessionID].users[id.split('_')[1]].securityProfile
             };
             clients[i].socket.send(JSON.stringify(message));
         }
