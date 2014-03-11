@@ -228,15 +228,12 @@ var platform = {
 					$('#brushColorHex').val(brushColorHex);
 				} else {
 					brushColorHex = brushColorHex.currentTarget.value;
-					$('#colorPicker').val('#' + brushColorHex);
-					if (window.jQuery.spectrum) $('#colorPicker').spectrum({
-						color: '#' + brushColorHex
-					});
 				}
 
 				updateRGB = true;
 				updateHSV = true;
 			}
+
 
 			if (brushColorHex.length < 6) {
 				return false;
@@ -247,6 +244,10 @@ var platform = {
 				platform.brush.brushColorHex = brushColorHex;
 				if (updateRGB) platform.brush.hexToRGB(brushColorHex, updateHSV);
 				$('#brushColorLabel').css('color', '#' + brushColorHex);
+				$('#colorPicker').val('#' + brushColorHex);
+				if (window.jQuery.spectrum) $('#colorPicker').spectrum({
+					color: '#' + brushColorHex
+				});
 				return true;
 			} else {
 				alert('Please enter a valid hex color value, not: ' + brushColorHex);
