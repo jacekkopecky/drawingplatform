@@ -436,6 +436,33 @@ unbootUser = function(user) {
     }
 };
 
+changeUserSecurityProfile = function(request, response) {
+    var postData = request.body;
+    var username = postData.username;
+    var sessionName = postData.sessionName;
+    var securityProfile = postData.securityProfile;
+    var securityProfileName = '';
+
+    switch(securityProfile){
+        case 1:
+            securityProfileName = "sessionOwner";
+            break;
+        case 2:
+            securityProfileName = "contributor";
+            break;
+        case 3:
+            securityProfileName = "watcher";
+            break;
+    }
+
+    var session = activeSessions[sessionName];
+    session.users[username].securityProfile = securityProfile;
+    session.users[username].securityProfileName = securityProfileName;
+
+    response.setHeader('Content-Type', 'text/json');
+    response.end(username + ' was made a ' + securityProfileName);
+};
+
 /**
  * Function to count the number of session owners left in a session
  * @param  {object} request  HTTP request object
@@ -538,6 +565,10 @@ app.post('/bootUser', function(request, response) {
 
 app.post('/banUser', function(request, response) {
     banUser(request, response);
+});
+
+app.post('/changeUserSecurityProfile', function(request, response) {
+    changeUserSecurityProfile(request, response);
 });
 
 app.listen(8000);

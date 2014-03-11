@@ -23,7 +23,7 @@ function User(options) {
 			if (!data) {
 				return;
 			}
-
+			console.log(data);
 			var layer;
 			if (typeof data.data !== 'undefined') {
 				layer = platform.layers.getLayer(data.data.layerName, data.data.global);
@@ -68,6 +68,9 @@ function User(options) {
 					user.removeConnection(data.data.username);
 					$('#' + user.sessionName + '_' + data.data.username + 'Row').remove();
 					break;
+				case 'CHANGE_USER_SECURITY_PROFILE':
+					user.changeSecurityProfile(data.data);
+					break;
 				default:
 					console.log(data);
 					break;
@@ -97,6 +100,8 @@ function User(options) {
 				delete this.connections[i];
 			}
 		}
+
+		$('#' + peerID + 'Row').remove();
 	};
 
 	/**
@@ -137,6 +142,28 @@ function User(options) {
 	this.removeConnection = function(username) {
 		this.connections[this.sessionName + '_' + username].close();
 		delete this.connections[this.sessionName + '_' + username];
+	};
+
+	this.changeSecurityProfile = function(data) {
+		if (data.username === this.username) {
+			this.securityProfile = data.securityProfile;
+			switch (data.securityProfile) {
+				case "1":
+					this.securityProfileName = "sessionOwner";
+					$('#globalUndoButton, #globalRedoButton').prop('disabled', false);
+					break;
+				case "2":
+					this.securityProfileName = "contributor";
+					$('#globalUndoButton, #globalRedoButton').prop('disabled', true);
+					break;
+				case "3":
+					this.securityProfileName = "watcher";
+					$('#globalUndoButton, #globalRedoButton').prop('disabled', true);
+					break;
+			}
+		}
+
+		$('#' + this.sessionName + '_' + data.username + 'Row').find('option[value=' + data.securityProfile + ']').prop('selected', true);
 	};
 }
 
@@ -1627,6 +1654,38 @@ var platform = {
 				console.error(e);
 				alert(e.message);
 			}
+		},
+
+		changeUserSecurityProfile: function(username, securityProfile) {
+			try {
+				platform.util.isSessionOwner(user);
+				$.ajax({
+					url: '/changeUserSecurityProfile',
+					method: 'post',
+					dataType: 'json',
+					data: {
+						username: username,
+						sessionName: user.sessionName,
+						securityProfile: securityProfile
+					}
+				});
+
+				var toSend = {
+					message: 'CHANGE_USER_SECURITY_PROFILE',
+					data: {
+						username: username,
+						securityProfile: securityProfile
+					}
+				};
+
+				for (var i in user.connections) {
+					user.connections[i].send(toSend);
+				}
+
+			} catch (e) {
+				console.error(e);
+				alert(e.message);
+			}
 		}
 	},
 
@@ -1844,19 +1903,18 @@ var platform = {
 			});
 		},
 
-		addUserToUserList: function(peerID, securityProfile){
-			// debugger;
+		addUserToUserList: function(peerID, securityProfile) {
 			var username = peerID.split('_')[1];
 			$('#userListBody').append(this._USER_TABLE_ROW.replace('PEERID', peerID + 'Row'));
 			var userListRow = $('#' + peerID + 'Row');
 			userListRow.find('input').val(username);
-			userListRow.find('select').val(securityProfile).on('change', function(){
-				// session.changeUserSecurityProfile(user.username, $(this).val());
+			userListRow.find('select').val(securityProfile).on('change', function() {
+				platform.session.changeUserSecurityProfile(username, $(this).val());
 			});
-			userListRow.find('.btn-warning').on('click', function(){
+			userListRow.find('.btn-warning').on('click', function() {
 				platform.session.bootUser(username, userListRow);
 			});
-			userListRow.find('.btn-danger').on('click', function(){
+			userListRow.find('.btn-danger').on('click', function() {
 				platform.session.banUser(username, userListRow);
 			});
 		},
@@ -2004,7 +2062,7 @@ var platform = {
 			height: 506
 		});
 
-		if (!platform.gotPlatformData) {
+		if (!platform.gotPlatformData || Array.isArray(platform.gotPlatformData)) {
 			// Create the background layer
 			platform.layers.createBackgroundLayer();
 
