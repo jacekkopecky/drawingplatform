@@ -42,6 +42,9 @@ function User(options) {
 					}
 					platform.init();
 					break;
+				case 'RECEIVED_LINE':
+					platform.drawLine.addReceivedLine(data.data);
+					break;
 				case 'RECEIVED_LAYER':
 					platform.layers.updateReceivedLayer(data.data);
 					break;
@@ -144,6 +147,10 @@ function User(options) {
 		delete this.connections[this.sessionName + '_' + username];
 	};
 
+	/**
+	 * Function to change the user's security profile based on a network request from as sesion owner
+	 * @param  {Object} data [Change request data]
+	 */
 	this.changeSecurityProfile = function(data) {
 		if (data.username === this.username) {
 			this.securityProfile = data.securityProfile;
@@ -637,7 +644,9 @@ var platform = {
 			if (addToHistory) {
 				platform.history.addToHistory();
 			}
-			platform.session.sendLayerToAll(platform.activeLayer);
+
+			// platform.session.sendLayerToAll(platform.activeLayer);
+			platform.session.sendLineToAll(platform.drawLine.newLine, platform.activeLayer.getAttr('layerName'), platform.activeLayer.getAttr('global'));
 		},
 
 		/**
@@ -651,6 +660,29 @@ var platform = {
 				platform.drawLine.points.push(platform.stage.getPointerPosition());
 				platform.activeLayer.drawScene();
 			}
+		},
+
+		/**
+		 * Draws a line that has been received from a connected peer
+		 * @param {obhect} data [Data received from the peer incl. JSON line]
+		 */
+		addReceivedLine: function(data){
+			// Create Kinetic Line from the included JSON
+			var line = Kinetic.Node.create(data.JSONline);
+
+			// Get the layer the line needs to added to
+			var layer;
+			if (data.global) {
+				layer = platform.layers.globalLayers[data.layerName];
+			} else {
+				layer = platform.layers.localLayers[data.layerName];
+			}
+
+			// Add the line, set zIndex, render layer and update preview
+			layer.add(line);
+			line.setZIndex(data.zIndex);
+			layer.drawScene();
+			platform.layers.updateLayerPreview(layer);
 		}
 	},
 
@@ -1037,11 +1069,19 @@ var platform = {
 			}
 		},
 
+		/**
+		 * Replaces an exisitng layer with an updated layer changed by one of the connected peers
+		 * @param  {String} json [JSON string of the layer]
+		 */
 		updateReceivedLayer: function(json) {
+			// Create a layer object from the string
 			var layer = Kinetic.Node.create(json);
+
+			// Get the layer's name and the active layer name
 			var layerName = layer.getAttr('layerName');
 			var activeLayerName = platform.activeLayer.getAttr('layerName');
 
+			// Replace the old layer
 			if (layer.getAttr('global')) {
 				if (platform.layers.globalLayers[layerName]) {
 					platform.layers.globalLayers[layerName].destroy();
@@ -1054,7 +1094,8 @@ var platform = {
 				platform.layers.localLayers[layerName] = layer;
 			}
 
-			platform.stage.add(layer);
+			// Add the layer to the stage and rebuild the layer model
+			platform.stage.add(layer); 
 			platform.layers.rebuildLayerModel(activeLayerName);
 		},
 		globalLayers: {},
@@ -1065,6 +1106,7 @@ var platform = {
 	 * The history object
 	 * Contains all functionality associated with undo / redo
 	 * @type {Object}
+	 * @TODO COMPLETELY REWRITE EVERYTHING TO DO WITH HISTORIES INTO SOMETHING MORE CLOSELY RESEMBLING VERSION CONTROL
 	 */
 	history: {
 		userHistory: [], // Actions the user has performed
@@ -1303,6 +1345,7 @@ var platform = {
 	/**
 	 * The session object
 	 * Handles client side functionality to initialise, join or leave a session
+	 * as well as propogating changes to any connected peers
 	 * @type {Object}
 	 */
 	session: {
@@ -1310,6 +1353,7 @@ var platform = {
 		 * Client side session initialisation
 		 */
 		initSession: function() {
+			// Get username and session name
 			var username = $('#username').val();
 			var sessionName = $('#sessionName').val();
 
@@ -1318,6 +1362,7 @@ var platform = {
 				return;
 			}
 
+			// Ajax to the server to create session
 			$.ajax({
 				url: '/initSession',
 				dataType: 'json',
@@ -1331,6 +1376,7 @@ var platform = {
 					$('body').html(data.body);
 
 					if (data.platformData) {
+						// Sanitise received platform data
 						if (!data.platformData.localLayers) data.platformData.localLayers = {};
 						if (!data.platformData.globalLayers) data.platformData.globalLayers = {};
 						if (!data.platformData.globalHistory) data.platformData.globalHistory = [];
@@ -1343,6 +1389,8 @@ var platform = {
 
 					// Initialise the drawing platform
 					platform.init();
+					
+					// Set the platform to save state every 30 seconds
 					platform.dbIntervalTimer = setInterval(function() {
 						platform.session.sendEverything('DATABASE');
 					}, 30000);
@@ -1358,6 +1406,7 @@ var platform = {
 		 * @return {[type]} [description]
 		 */
 		joinSession: function() {
+			// Get the username and session name
 			var username = $('#username').val();
 			var sessionName = $('#sessionName').val();
 
@@ -1366,6 +1415,7 @@ var platform = {
 				return;
 			}
 
+			// Ajax to the server to join the session
 			$.ajax({
 				url: '/joinSession',
 				dataType: 'json',
@@ -1407,7 +1457,7 @@ var platform = {
 		},
 
 		/**
-		 * Client side tear down of a session
+		 * Client side tear down of a session (update DB and leave session)
 		 */
 		leaveSession: function() {
 			platform.session.sendEverything("DATABASE");
@@ -1422,10 +1472,13 @@ var platform = {
 		},
 
 		/**
-		 * Check session owners
+		 * Checks the server to see if there any other session owners left in the session
+		 * @return {String} [Text for the confirm dialog]
 		 */
 		checkSessionOwners: function() {
+			// Default confirm text
 			var response = "Are you sure you want to leave the session?";
+
 			$.ajax({
 				url: '/checkSessionOwners',
 				data: {
@@ -1436,6 +1489,7 @@ var platform = {
 				async: false,
 				success: function(data) {
 					if (!data.count) {
+						// If there are no other session owners, change the confirm text
 						response = 'You are about to the leave the session. \n' +
 							'You are the only session owner. \n' +
 							'All other users will be disconnected';
@@ -1445,6 +1499,10 @@ var platform = {
 			return response;
 		},
 
+		/**
+		 * Function to send the entire drawing platform to a specified peer
+		 * @param  {String} connectionID [ID of the peer to send to
+		 */
 		sendEverything: function(connectionID) {
 			var globalLayers = {};
 			var localLayers = {};
@@ -1481,12 +1539,15 @@ var platform = {
 
 			if (user.connections[connectionID].open) {
 				clearInterval(user.setIntervalTimer);
+				user.connections[connectionID].send(toSend);
 			}
-
-			user.connections[connectionID].send(toSend);
 
 		},
 
+		/**
+		 * Sends a JSON version of a layer to all connected peers
+		 * @param  {Kinetic.Layer} layer [The layer to send]
+		 */
 		sendLayerToAll: function(layer) {
 			var JSONlayer = layer.toJSON();
 			var toSend = {
@@ -1499,6 +1560,34 @@ var platform = {
 			}
 		},
 
+		/**
+		 * Sends a JSON version of a line to all connected peers
+		 * @param  {Kinetic.Line} line      [The line to send]
+		 * @param  {String} layerName [The name of the layer the line should be on]
+		 * @param  {Boolean} global    [Whether the layer is global
+		 */
+		sendLineToAll: function(line, layerName, global) {
+			var JSONline = line.toJSON();
+			var toSend = {
+				message: 'RECEIVED_LINE',
+				data: {
+					JSONline: JSONline,
+					layerName: layerName,
+					global: global,
+					zIndex: line.getZIndex()
+				}
+			};
+
+			for (var i in user.connections){
+				user.connections[i].send(toSend);
+			}
+		},
+
+		/**
+		 * Sends a message to all connected peers that a layer has been deleted
+		 * @param  {String} layerName [Name of the layer to delete]
+		 * @param  {Boolean} global    [Whether the layer is global]
+		 */
 		sendLayerToDelete: function(layerName, global) {
 			var toSend = {
 				message: 'DELETE_LAYER',
@@ -1512,7 +1601,12 @@ var platform = {
 				user.connections[i].send(toSend);
 			}
 		},
-
+		
+		/**
+		 * Sends a message to all connected peers that a layer has been locked
+		 * @param  {String} layerName [Name of the layer to lock]
+		 * @param  {Boolean} global    [Whether the layer is global]
+		 */
 		sendLayerToLock: function(layerName, global) {
 			var toSend = {
 				message: 'LOCK_LAYER',
@@ -1657,9 +1751,16 @@ var platform = {
 			}
 		},
 
+		/**
+		 * Updates the security profile of a connected user
+		 * @param  {String} username        [Username of the user being updated]
+		 * @param  {String} securityProfile [Security profile to change to]
+		 */
 		changeUserSecurityProfile: function(username, securityProfile) {
 			try {
 				platform.util.isSessionOwner(user);
+				
+				// Change the profile on the server
 				$.ajax({
 					url: '/changeUserSecurityProfile',
 					method: 'post',
@@ -1671,6 +1772,7 @@ var platform = {
 					}
 				});
 
+				// Prepare and send the message to notify connected peers of the change
 				var toSend = {
 					message: 'CHANGE_USER_SECURITY_PROFILE',
 					data: {
@@ -1904,11 +2006,25 @@ var platform = {
 			});
 		},
 
+		/**
+		 * Adds a user to the list of connected users 
+		 * @param {String} peerID          [User identifier used by peerjs]
+		 * @param {String} securityProfile [The security profile of the user]
+		 */
 		addUserToUserList: function(peerID, securityProfile) {
+			// Split the username out of the peerid
 			var username = peerID.split('_')[1];
+
+			// Add a new row to the table
 			$('#userListBody').append(this._USER_TABLE_ROW.replace('PEERID', peerID + 'Row'));
+			
+			// Get the new row DOM element
 			var userListRow = $('#' + peerID + 'Row');
+
+			// Update the username
 			userListRow.find('input').val(username);
+
+			// Add event listeners to the new row
 			userListRow.find('select').val(securityProfile).on('change', function() {
 				platform.session.changeUserSecurityProfile(username, $(this).val());
 			});
