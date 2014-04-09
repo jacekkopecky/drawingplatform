@@ -539,7 +539,7 @@ app.get('/getSessionList', function(request, response){
 
 app.get('/error_log', function(request, response) {
     response.setHeader('Content-Type', 'text/plain');
-    var body = fs.readFileSync(__dirname + '/logs/error.log');
+    var body = fs.readFileSync(__dirname + '/logs/err.log');
     response.end(body);
 });
 

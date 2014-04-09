@@ -64,5 +64,6 @@ module.exports = function(grunt) {
 
     // Default task(s).
     grunt.registerTask('default', ['jasmine', 'jshint', 'less', 'forever:server:start', 'watch']);
+    grunt.registerTask('server', ['forever:server:start']);
 
 };
