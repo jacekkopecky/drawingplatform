@@ -519,12 +519,22 @@ saveToDatabase = function(request, response) {
 // Server initialisation and routing setup
 var app = express();
 app.use(express.static(__dirname + '/../public'));
-app.use(express.bodyParser());
+app.use(express.bodyParser({limit: '512mb'}));
 
 app.get('/', function(request, response) {
     response.setHeader('Content-Type', 'text/html');
     var body = fs.readFileSync(__dirname + '/../public/index.html');
     response.end(body);
+});
+
+app.get('/getSessionList', function(request, response){
+    response.setHeader('Content-Type', 'text/json');
+    var data = {};
+    for (var i in activeSessions){
+        data[i] = Object.keys(activeSessions[i].users).length;
+    }
+    data = JSON.stringify(data);
+    response.end(data);
 });
 
 app.get('/error_log', function(request, response) {
@@ -569,6 +579,18 @@ app.post('/banUser', function(request, response) {
 
 app.post('/changeUserSecurityProfile', function(request, response) {
     changeUserSecurityProfile(request, response);
+});
+
+app.post('/sendFeedback', function(request, response){
+    console.log('Feedback received');
+    DB.collection('feedback').insert(request.body, function(err, result){
+        if (err) {
+            response.status(500);
+        } else {
+            response.status(200);
+        }
+        response.end();
+    });
 });
 
 app.listen(8000);

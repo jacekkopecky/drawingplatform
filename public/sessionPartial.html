@@ -18,6 +18,7 @@
 		<button type="button" class="btn btn-success btn-xs" id="saveToDB" data-toggle="tooltip" data-placement="bottom" data-original-title="Save to database">
 			<span class="glyphicon glyphicon-floppy-save"></span>
 		</button>
+		<button type="button" class="btn btn-danger btn-xs" style="margin-left:40%" data-toggle="modal" data-target="#feedbackFormModal">Send feedback!</button>
 		<button class="btn btn-info btn-xs pull-right" data-toggle="modal" data-target="#userList">
 			<span class="glyphicon glyphicon-user"></span>Users
 		</button>
@@ -91,6 +92,38 @@
 				<table class="table table-condensed table-stiped">
 					<tbody id='userListBody'></tbody>
 				</table>
+			</div>
+		</div>
+	</div>
+</div>
+<!-- Modal -->
+<div class="modal fade" id="feedbackFormModal" tabindex="-1" role="dialog" aria-labelledby="feedbackFormLabel" aria-hidden="true">
+	<div class="modal-dialog modal-lg">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+				<h4 class="modal-title" id="feedbackFormLabel">Feedback form</h4>
+			</div>
+			<div class="modal-body">
+				<div class="alert alert-success">Thank you for submitting your feedback!</div>
+				<div class="alert alert-danger">Something went wrong, please try again.</div>
+				<form id="feedbackForm">
+				<fieldset id="feedbackFieldset">
+					<div class="form-group">
+	                    <label class="control-label">What worked well?</label>
+                        <textarea id="workedWell" class="form-control" />
+	                </div>
+	                <div class="form-group">
+	                    <label class="control-label">What needs more work?</label>
+                        <textarea id="workedBadly" class="form-control" />
+	                </div>
+	                <div class="form-group">
+	                    <label class="control-label">What else would you like to see?</label>
+                        <textarea id="addedFeatures" class="form-control" />
+	                </div>
+	                <input type="submit" class="btn btn-default" />
+	                </fieldset>
+				</form>
 			</div>
 		</div>
 	</div>

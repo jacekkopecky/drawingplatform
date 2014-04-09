@@ -1930,6 +1930,36 @@ var platform = {
 			$('#brushToolButton').click();
 
 			$('#eraserToolButton').on('click', platform.brush.eraser);
+
+			$('.alert').hide();
+			$('#feedbackForm').on('submit', function(event){
+				event.preventDefault();
+
+				var feedback = {
+					workedWell: $('#workedWell').val(),
+					workedBadly: $('#workedBadly').val(),
+					addedFeatures: $('#addedFeatures').val()
+				};
+
+				$.ajax({
+					url: '/sendFeedback',
+					data: feedback,
+					method: 'post',
+					beforeSend: function(){
+						$('#feedbackFieldset').prop('disabled', true);
+						$('.alert').slideUp();
+					},
+					success: function(){
+						$('.alert-success').slideDown();
+						$('#feedbackFieldset').prop('disabled', false);
+						$('#workedWell, #workedBadly, #addedFeatures').val("");
+					},
+					error: function(a,b,c){
+						$('.alert-danger').slideDown();
+						$('#feedbackFieldset').prop('disabled', false);
+					}
+				});
+			});
 		},
 
 		/**

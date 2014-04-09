@@ -26,6 +26,7 @@
 				test: (typeof window.webkitRTCPeerConnection === "function" || typeof window.mozRTCPeerConnection === "function" || typeof window.RTCPeerConnection === "function"),
 				nope: ['./js/polyfills/nowebrtc.js']
 			});
+
 		</script>
 	</head>
 	<body>
@@ -58,9 +59,52 @@
 						<button class="col-lg-12 btn btn-default btn-lg" type="button" id="joinSession" onclick="platform.session.joinSession()">Join session</button>
 					</div>
 				</div>
+				<div class="col-lg-12">
+					<a class="pull-right" id="sessionLister" data-toggle="modal" data-target="#sessionList" href="#">List active sessions</a>
+				</div>
 			</div>
-			
-			
 		</div>
+		<!-- Modal -->
+		<div class="modal fade" id="sessionList" tabindex="-1" role="dialog" aria-labelledby="sessionListLabel" aria-hidden="true">
+			<div class="modal-dialog modal-lg">
+				<div class="modal-content">
+					<div class="modal-header">
+						<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+						<h4 class="modal-title" id="sessionListLabel">Session list</h4>
+					</div>
+					<div class="modal-body" id="sessionListBody">
+					</div>
+				</div>
+			</div>
+		</div>
+		<script>
+			$(document).ready(function(){
+				$('#sessionLister').on('click', function(){
+					$.ajax({
+						url: "/getSessionList",
+						method: "get",
+						dataType: "json",
+						beforeSend: function(){
+							$('#sessionListBody').html("");
+						},
+						success: function(data){
+							if (!Object.keys(data).length) {
+								$('#sessionListBody').append('No active sessions');
+								return;
+							}
+							
+							$('#sessionListBody').append('<ul>');
+							for (var i in data) {
+								$('#sessionListBody').append('<li>' + i + ' (' + data[i] + ' active users)</li>');
+							}
+							$('#sessionListBody').append('</ul>');
+						},
+						error: function(a,b,c){
+							console.error(a,b,c);
+						}
+					});
+				});
+			});
+		</script>
 	</body>
 </html>
